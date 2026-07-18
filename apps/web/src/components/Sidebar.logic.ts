@@ -392,6 +392,17 @@ export function sortThreadsForSidebarV2<
   );
 }
 
+export function filterProjectsForNewThreadPicker<
+  T extends { readonly title: string; readonly workspaceRoot: string },
+>(projects: readonly T[], query: string): T[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (normalizedQuery.length === 0) return [...projects];
+
+  return projects.filter((project) =>
+    `${project.title}\n${project.workspaceRoot}`.toLocaleLowerCase().includes(normalizedQuery),
+  );
+}
+
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
 }): ThreadStatusPill | null {
