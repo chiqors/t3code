@@ -1756,7 +1756,7 @@ export default function GitActionsControl({
           }}
         >
           <MenuTrigger
-            className="flex min-h-9 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70"
+            className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70"
             disabled={isGitActionRunning}
             aria-label={`${sourceControlPresentation.providerName} actions`}
           >
@@ -1789,11 +1789,16 @@ export default function GitActionsControl({
           }}
         >
           <MenuTrigger
-            render={<Button aria-label="Commit or push" size="xs" variant="outline" />}
+            className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70"
             disabled={isGitActionRunning}
+            aria-label="Commit and push actions"
           >
-            <GitCommitIcon aria-hidden="true" className="size-3.5" />
-            <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+            <GitCommitIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">Commit &amp; push</span>
+            <ChevronDownIcon
+              aria-hidden="true"
+              className="size-3.5 shrink-0 text-muted-foreground/60"
+            />
           </MenuTrigger>
           <MenuPopup side="left" align="start" sideOffset={6} className="min-w-44">
             {gitOnlyMenuItems.map(renderActionMenuItem)}

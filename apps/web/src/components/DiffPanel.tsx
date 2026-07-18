@@ -15,7 +15,9 @@ import {
   CopyIcon,
   ChevronsUpDownIcon,
   EllipsisIcon,
+  FileMinus2Icon,
   FolderTreeIcon,
+  ImageIcon,
   MessageSquareIcon,
   PilcrowIcon,
   Rows3Icon,
@@ -873,26 +875,23 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuCheckboxItem checked={wordWrap} onCheckedChange={setWordWrap}>
-              <TextWrapIcon />
               Enable word wrap
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem checked={wordDiffs} onCheckedChange={setWordDiffs}>
-              <PilcrowIcon />
               Enable word diffs
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
               checked={diffIgnoreWhitespace}
               onCheckedChange={setDiffIgnoreWhitespace}
             >
-              <PilcrowIcon />
               Hide whitespace
             </DropdownMenuCheckboxItem>
             <DropdownMenuItem disabled>
-              <Rows3Icon />
+              <FileMinus2Icon />
               Don&apos;t load full files
             </DropdownMenuItem>
             <DropdownMenuItem disabled>
-              <SearchIcon />
+              <ImageIcon />
               Enable rich preview
             </DropdownMenuItem>
             <DropdownMenuSeparator />

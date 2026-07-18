@@ -116,6 +116,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(IpcChannels.MENU_ACTION_CHANNEL, wrappedListener);
     };
   },
+  onAppClosing: (listener) => {
+    const wrappedListener = () => listener();
+    ipcRenderer.on(IpcChannels.APP_CLOSING_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.APP_CLOSING_CHANNEL, wrappedListener);
+    };
+  },
   getWindowFullscreenState: () =>
     ipcRenderer.sendSync(IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL) === true,
   getWindowZoomFactor: () => {

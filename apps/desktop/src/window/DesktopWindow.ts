@@ -16,6 +16,7 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import {
+  APP_CLOSING_CHANNEL,
   MENU_ACTION_CHANNEL,
   WINDOW_FULLSCREEN_STATE_CHANNEL,
   WINDOW_ZOOM_FACTOR_CHANGED_CHANNEL,
@@ -80,6 +81,7 @@ export class DesktopWindow extends Context.Service<
     // produce a stranded window pointing at nothing.
     readonly handleBackendNotReady: Effect.Effect<void>;
     readonly dispatchMenuAction: (action: string) => Effect.Effect<void, DesktopWindowError>;
+    readonly notifyAppClosing: Effect.Effect<void>;
     readonly syncAppearance: Effect.Effect<void>;
   }
 >()("@t3tools/desktop/window/DesktopWindow") {}
@@ -631,6 +633,7 @@ export const make = Effect.gen(function* () {
 
       send();
     }),
+    notifyAppClosing: electronWindow.sendAll(APP_CLOSING_CHANNEL),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
       yield* electronWindow.syncAllAppearance((window) =>

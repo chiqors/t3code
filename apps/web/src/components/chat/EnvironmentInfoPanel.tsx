@@ -4,12 +4,9 @@ import {
   ArrowUpRightIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  CloudIcon,
   Globe2Icon,
   GitBranchIcon,
-  GitCommitIcon,
   ImageIcon,
-  LaptopIcon,
   ListFilterIcon,
   MoreHorizontalIcon,
   PanelRightOpenIcon,
@@ -18,7 +15,6 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { useEnvironment } from "../../state/environments";
 import { useKnownTerminalSessions } from "../../state/terminalSessions";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -117,7 +113,7 @@ function InfoRow({
   onClick?: () => void;
 }) {
   const content = (
-    <div className="flex min-h-9 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70">
+    <div className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70">
       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {value ? <span className="max-w-44 truncate text-muted-foreground">{value}</span> : null}
@@ -196,8 +192,6 @@ export function EnvironmentInfoPanel({
   const [backgroundProcessesExpanded, setBackgroundProcessesExpanded] = useState(true);
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
   const [branchStartFromOrigin, setBranchStartFromOrigin] = useState(false);
-  const environment = useEnvironment(environmentId);
-  const isPrimary = environment?.entry.target._tag === "PrimaryConnectionTarget";
   const changes = gitStatus?.workingTree;
   const visibleSources = sources.slice(0, MAX_ENVIRONMENT_INFO_ROWS);
   const knownTerminalSessions = useKnownTerminalSessions({
@@ -219,56 +213,44 @@ export function EnvironmentInfoPanel({
     <aside
       aria-label="Environment information"
       data-testid="environment-info-panel"
-      className="absolute top-[calc(var(--workspace-topbar-height)+0.75rem)] right-3 z-30 max-h-[calc(100%-var(--workspace-topbar-height)-1.5rem)] w-[min(22rem,calc(100%-1.5rem))] overflow-y-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg/5 sm:right-4"
+      className="absolute top-[calc(var(--workspace-topbar-height)+0.5rem)] right-3 z-30 max-h-[calc(100%-var(--workspace-topbar-height)-1rem)] w-[min(19rem,calc(100%-1.5rem))] overflow-y-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg/5 sm:right-4"
     >
       <div>
-        <div className="flex items-center justify-between px-1">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Environment</p>
-            <p className="mt-0.5 max-w-64 truncate text-sm font-medium">
-              {environment?.label ?? "Current environment"}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            {isPrimary ? (
-              <LaptopIcon className="size-4 text-muted-foreground" />
-            ) : (
-              <CloudIcon className="size-4 text-muted-foreground" />
-            )}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="size-6 rounded-sm p-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => setCollapsed((value) => !value)}
-                    aria-expanded={!collapsed}
-                    aria-label={
-                      collapsed
-                        ? "Expand environment information"
-                        : "Collapse environment information"
-                    }
-                    data-testid="environment-info-collapse-trigger"
-                  >
-                    {collapsed ? (
-                      <ChevronRightIcon className="size-3.5" />
-                    ) : (
-                      <ChevronDownIcon className="size-3.5" />
-                    )}
-                  </Button>
-                }
-              />
-              <TooltipPopup side="top">
-                {collapsed ? "Expand environment information" : "Collapse environment information"}
-              </TooltipPopup>
-            </Tooltip>
-          </div>
+        <div className="flex min-h-7 items-center justify-between px-1">
+          <p className="text-xs font-medium text-muted-foreground">Environment</p>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-6 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setCollapsed((value) => !value)}
+                  aria-expanded={!collapsed}
+                  aria-label={
+                    collapsed
+                      ? "Expand environment information"
+                      : "Collapse environment information"
+                  }
+                  data-testid="environment-info-collapse-trigger"
+                >
+                  {collapsed ? (
+                    <ChevronRightIcon className="size-3.5" />
+                  ) : (
+                    <ChevronDownIcon className="size-3.5" />
+                  )}
+                </Button>
+              }
+            />
+            <TooltipPopup side="top">
+              {collapsed ? "Expand environment information" : "Collapse environment information"}
+            </TooltipPopup>
+          </Tooltip>
         </div>
 
         {!collapsed ? (
-          <div className="mt-3 space-y-3">
-            <div className="space-y-0.5">
+          <div className="mt-1 space-y-2">
+            <div>
               <InfoRow
                 icon={ListFilterIcon}
                 label="Changes"
@@ -290,7 +272,7 @@ export function EnvironmentInfoPanel({
                   label="Branch"
                   trailing={
                     <BranchToolbarBranchSelector
-                      className="max-w-44"
+                      className="max-w-40"
                       environmentId={environmentId}
                       threadId={activeThreadRef.threadId}
                       {...(draftId ? { draftId } : {})}
@@ -310,17 +292,11 @@ export function EnvironmentInfoPanel({
                   value={gitStatus?.refName ?? "Detached"}
                 />
               )}
-              <InfoRow
-                icon={GitCommitIcon}
-                label="Commit or push"
-                trailing={
-                  <GitActionsControl
-                    gitCwd={gitCwd}
-                    activeThreadRef={activeThreadRef}
-                    {...(draftId ? { draftId } : {})}
-                    variant="git"
-                  />
-                }
+              <GitActionsControl
+                gitCwd={gitCwd}
+                activeThreadRef={activeThreadRef}
+                {...(draftId ? { draftId } : {})}
+                variant="git"
               />
               <GitActionsControl
                 gitCwd={gitCwd}
@@ -365,7 +341,7 @@ export function EnvironmentInfoPanel({
                     {backgroundProcesses.slice(0, MAX_ENVIRONMENT_INFO_ROWS).map((process) => (
                       <div
                         key={process.id}
-                        className="flex min-h-9 min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] text-foreground/90"
+                        className="flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-1 text-[13px] text-foreground/90"
                       >
                         <TerminalSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 flex-1 truncate" title={process.label}>
