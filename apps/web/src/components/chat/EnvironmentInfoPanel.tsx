@@ -1,19 +1,12 @@
-import type {
-  EnvironmentId,
-  OrchestrationThreadActivity,
-  ScopedThreadRef,
-  VcsStatusResult,
-} from "@t3tools/contracts";
+import type { EnvironmentId, ScopedThreadRef, VcsStatusResult } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import {
   ArrowUpRightIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CloudIcon,
-  ComputerIcon,
   Globe2Icon,
   GitBranchIcon,
-  GitCompareArrowsIcon,
   GitCommitIcon,
   ImageIcon,
   LaptopIcon,
@@ -38,19 +31,21 @@ import { Separator } from "../ui/separator";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import GitActionsControl from "../GitActionsControl";
+import { BranchToolbarBranchSelector } from "../BranchToolbarBranchSelector";
 
-const ENVIRONMENT_INFO_PANEL_OPEN_KEY = "chat_environment_info_open";
+// Reset the pre-cleanup preference once so existing sessions start with the panel visible.
+const ENVIRONMENT_INFO_PANEL_OPEN_KEY = "chat_environment_info_open_v2";
 const ENVIRONMENT_INFO_PANEL_COLLAPSED_KEY = "chat_environment_info_collapsed";
 const MAX_ENVIRONMENT_INFO_ROWS = 10;
 
 interface EnvironmentInfoPanelProps {
   environmentId: EnvironmentId;
   gitStatus: VcsStatusResult | null;
-  activities: ReadonlyArray<OrchestrationThreadActivity>;
   sources: ReadonlyArray<ConversationSource>;
   gitCwd: string | null;
   activeThreadRef: ScopedThreadRef | null;
   draftId?: DraftId;
+  onOpenChanges: () => void;
   onOpenSources: () => void;
   onOpenProcesses: () => void;
   rightPanelOpen: boolean;
@@ -155,7 +150,7 @@ export function shouldShowEnvironmentInfoPanel(
 
 export function EnvironmentInfoToggle({ rightPanelOpen }: { rightPanelOpen: boolean }) {
   const [open, setOpen] = useEnvironmentInfoPanelOpen();
-  const compactWindow = useMediaQuery("max-xl");
+  const compactWindow = useMediaQuery("max-lg");
   const label = compactWindow
     ? "Environment information will return when the window is wider"
     : open
@@ -186,24 +181,24 @@ export function EnvironmentInfoToggle({ rightPanelOpen }: { rightPanelOpen: bool
 export function EnvironmentInfoPanel({
   environmentId,
   gitStatus,
-  activities,
   sources,
   gitCwd,
   activeThreadRef,
   draftId,
+  onOpenChanges,
   onOpenSources,
   onOpenProcesses,
   rightPanelOpen,
 }: EnvironmentInfoPanelProps) {
   const [open] = useEnvironmentInfoPanelOpen();
-  const compactWindow = useMediaQuery("max-xl");
+  const compactWindow = useMediaQuery("max-lg");
   const [collapsed, setCollapsed] = useEnvironmentInfoPanelCollapsed();
   const [backgroundProcessesExpanded, setBackgroundProcessesExpanded] = useState(true);
   const [sourcesExpanded, setSourcesExpanded] = useState(true);
+  const [branchStartFromOrigin, setBranchStartFromOrigin] = useState(false);
   const environment = useEnvironment(environmentId);
   const isPrimary = environment?.entry.target._tag === "PrimaryConnectionTarget";
   const changes = gitStatus?.workingTree;
-  const activityCount = activities.length;
   const visibleSources = sources.slice(0, MAX_ENVIRONMENT_INFO_ROWS);
   const knownTerminalSessions = useKnownTerminalSessions({
     environmentId,
@@ -277,11 +272,7 @@ export function EnvironmentInfoPanel({
               <InfoRow
                 icon={ListFilterIcon}
                 label="Changes"
-                value={
-                  changes
-                    ? `+${changes.insertions.toLocaleString()} -${changes.deletions.toLocaleString()}`
-                    : "No repository status"
-                }
+                onClick={onOpenChanges}
                 trailing={
                   changes ? (
                     <span className="text-xs font-medium">
@@ -293,16 +284,32 @@ export function EnvironmentInfoPanel({
                   ) : undefined
                 }
               />
-              <InfoRow
-                icon={isPrimary ? LaptopIcon : CloudIcon}
-                label="Workspace"
-                value={isPrimary ? "Local" : "Remote"}
-              />
-              <InfoRow
-                icon={GitBranchIcon}
-                label="Branch"
-                value={gitStatus?.refName ?? "Detached"}
-              />
+              {activeThreadRef ? (
+                <InfoRow
+                  icon={GitBranchIcon}
+                  label="Branch"
+                  trailing={
+                    <BranchToolbarBranchSelector
+                      className="max-w-44"
+                      environmentId={environmentId}
+                      threadId={activeThreadRef.threadId}
+                      {...(draftId ? { draftId } : {})}
+                      envLocked={false}
+                      startFromOrigin={branchStartFromOrigin}
+                      onStartFromOriginChange={setBranchStartFromOrigin}
+                      showTriggerIcon={false}
+                      popupSide="left"
+                      popupAlign="start"
+                    />
+                  }
+                />
+              ) : (
+                <InfoRow
+                  icon={GitBranchIcon}
+                  label="Branch"
+                  value={gitStatus?.refName ?? "Detached"}
+                />
+              )}
               <InfoRow
                 icon={GitCommitIcon}
                 label="Commit or push"
@@ -311,58 +318,49 @@ export function EnvironmentInfoPanel({
                     gitCwd={gitCwd}
                     activeThreadRef={activeThreadRef}
                     {...(draftId ? { draftId } : {})}
+                    variant="git"
                   />
                 }
               />
-              <InfoRow
-                icon={GitCompareArrowsIcon}
-                label="Compare branch"
-                trailing={<ArrowUpRightIcon className="size-3.5 text-muted-foreground/60" />}
+              <GitActionsControl
+                gitCwd={gitCwd}
+                activeThreadRef={activeThreadRef}
+                {...(draftId ? { draftId } : {})}
+                variant="provider"
               />
             </div>
 
-            <Separator />
+            {backgroundProcesses.length > 0 || sources.length > 0 ? <Separator /> : null}
 
-            <div className="space-y-0.5">
-              <p className="px-1 text-xs font-medium text-muted-foreground">Computer Use</p>
-              <InfoRow
-                icon={ComputerIcon}
-                label="Picture in Picture"
-                value="Unavailable"
-                trailing={<span className="text-xs text-muted-foreground/60">Hidden</span>}
-              />
-            </div>
-
-            <Separator />
-
-            <div className="space-y-0.5">
-              <div className="flex min-h-7 items-center justify-between rounded-sm px-1 hover:bg-accent/60">
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                  onClick={() => setBackgroundProcessesExpanded((value) => !value)}
-                  aria-expanded={backgroundProcessesExpanded}
-                >
-                  <p className="truncate text-xs font-medium text-muted-foreground">
-                    Background processes
-                  </p>
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    {backgroundProcesses.length}
-                    {backgroundProcessesExpanded ? (
-                      <ChevronDownIcon className="size-3.5" />
-                    ) : (
-                      <ChevronRightIcon className="size-3.5" />
-                    )}
-                  </span>
-                </button>
-                {backgroundProcesses.length > 0 ? (
-                  <OpenDetailsButton label="Open background processes" onClick={onOpenProcesses} />
-                ) : null}
-              </div>
-              {backgroundProcessesExpanded ? (
-                backgroundProcesses.length === 0 ? (
-                  <p className="px-1 text-xs text-muted-foreground/70">No background processes</p>
-                ) : (
+            {backgroundProcesses.length > 0 ? (
+              <div className="space-y-0.5">
+                <div className="flex min-h-7 items-center justify-between rounded-sm px-1 hover:bg-accent/60">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                    onClick={() => setBackgroundProcessesExpanded((value) => !value)}
+                    aria-expanded={backgroundProcessesExpanded}
+                  >
+                    <p className="truncate text-xs font-medium text-muted-foreground">
+                      Background processes
+                    </p>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {backgroundProcesses.length}
+                      {backgroundProcessesExpanded ? (
+                        <ChevronDownIcon className="size-3.5" />
+                      ) : (
+                        <ChevronRightIcon className="size-3.5" />
+                      )}
+                    </span>
+                  </button>
+                  {backgroundProcesses.length > 0 ? (
+                    <OpenDetailsButton
+                      label="Open background processes"
+                      onClick={onOpenProcesses}
+                    />
+                  ) : null}
+                </div>
+                {backgroundProcessesExpanded ? (
                   <>
                     {backgroundProcesses.slice(0, MAX_ENVIRONMENT_INFO_ROWS).map((process) => (
                       <div
@@ -382,41 +380,37 @@ export function EnvironmentInfoPanel({
                       </p>
                     ) : null}
                   </>
-                )
-              ) : null}
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2 px-1">
-              <div className="flex min-h-7 items-center justify-between rounded-sm hover:bg-accent/60">
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                  onClick={() => setSourcesExpanded((value) => !value)}
-                  aria-expanded={sourcesExpanded}
-                >
-                  <p className="text-xs font-medium text-muted-foreground">Sources</p>
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    {sources.length}
-                    {sourcesExpanded ? (
-                      <ChevronDownIcon className="size-3.5" />
-                    ) : (
-                      <ChevronRightIcon className="size-3.5" />
-                    )}
-                  </span>
-                </button>
-                {sources.length > 0 ? (
-                  <OpenDetailsButton label="Open conversation sources" onClick={onOpenSources} />
                 ) : null}
               </div>
-              {sourcesExpanded ? (
-                <>
-                  {sources.length === 0 ? (
-                    <p className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 text-[11px] text-muted-foreground">
-                      Files and links you add to this conversation will appear here.
-                    </p>
-                  ) : (
+            ) : null}
+
+            {backgroundProcesses.length > 0 && sources.length > 0 ? <Separator /> : null}
+
+            {sources.length > 0 ? (
+              <div className="space-y-2 px-1">
+                <div className="flex min-h-7 items-center justify-between rounded-sm hover:bg-accent/60">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                    onClick={() => setSourcesExpanded((value) => !value)}
+                    aria-expanded={sourcesExpanded}
+                  >
+                    <p className="text-xs font-medium text-muted-foreground">Sources</p>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {sources.length}
+                      {sourcesExpanded ? (
+                        <ChevronDownIcon className="size-3.5" />
+                      ) : (
+                        <ChevronRightIcon className="size-3.5" />
+                      )}
+                    </span>
+                  </button>
+                  {sources.length > 0 ? (
+                    <OpenDetailsButton label="Open conversation sources" onClick={onOpenSources} />
+                  ) : null}
+                </div>
+                {sourcesExpanded ? (
+                  <>
                     <div className="divide-y divide-border/70 border-y border-border/70">
                       {visibleSources.map((source) => {
                         const content = (
@@ -457,45 +451,21 @@ export function EnvironmentInfoPanel({
                         );
                       })}
                     </div>
-                  )}
-                  {sources.length > MAX_ENVIRONMENT_INFO_ROWS ? (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      className="w-full justify-start px-1.5 text-muted-foreground"
-                      onClick={onOpenSources}
-                    >
-                      View all
-                      <ArrowUpRightIcon className="size-3" />
-                    </Button>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-
-            <div className="space-y-2 px-1">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">Subagents</p>
-                {activityCount > 0 ? (
-                  <span className="text-xs text-muted-foreground">{activityCount} activity</span>
+                    {sources.length > MAX_ENVIRONMENT_INFO_ROWS ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="w-full justify-start px-1.5 text-muted-foreground"
+                        onClick={onOpenSources}
+                      >
+                        View all
+                        <ArrowUpRightIcon className="size-3" />
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
-              <div
-                className={cn(
-                  "rounded-md border border-border/70 bg-muted/20 px-2.5 py-2",
-                  activityCount > 0 && "bg-accent/30",
-                )}
-              >
-                <p className="text-xs text-foreground/85">
-                  {activityCount > 0
-                    ? "Agent activity is available in this thread."
-                    : "No active subagents"}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                  T3 Code does not currently support spawning or managing child subagent threads.
-                </p>
-              </div>
-            </div>
+            ) : null}
           </div>
         ) : null}
       </div>

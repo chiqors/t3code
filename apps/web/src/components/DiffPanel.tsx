@@ -12,10 +12,14 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
+  CopyIcon,
   ChevronsUpDownIcon,
+  EllipsisIcon,
+  FolderTreeIcon,
   MessageSquareIcon,
   PilcrowIcon,
   Rows3Icon,
+  RefreshCwIcon,
   SearchIcon,
   TextWrapIcon,
 } from "lucide-react";
@@ -55,7 +59,9 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuCheckboxItem,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -218,17 +224,6 @@ const DIFF_PANEL_UNSAFE_CSS = `
   text-decoration-color: currentColor;
 }
 
-[data-separator="line-info"] [data-separator-content],
-[data-separator="line-info-basic"] [data-separator-content] {
-  cursor: pointer;
-  user-select: none;
-}
-
-[data-separator="line-info"] [data-separator-content]:hover,
-[data-separator="line-info-basic"] [data-separator-content]:hover {
-  color: var(--foreground) !important;
-}
-
 [data-separator="line-info"] [data-unmodified-lines],
 [data-separator="line-info-basic"] [data-unmodified-lines] {
   align-items: center;
@@ -252,6 +247,8 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
   const [fileFilter, setFileFilter] = useState("");
   const [allNavigatorDirectoriesExpanded, setAllNavigatorDirectoriesExpanded] = useState(true);
+  const [filesPanelOpen, setFilesPanelOpen] = useState(true);
+  const [wordDiffs, setWordDiffs] = useState(false);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   const [baseRefQuery, setBaseRefQuery] = useState("");
@@ -580,6 +577,41 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
     [collapseScopeKey],
   );
 
+  const setAllDiffFilesCollapsed = useCallback(
+    (collapsed: boolean) => {
+      setCollapsedDiffFiles({
+        scopeKey: collapseScopeKey,
+        fileKeys: collapsed
+          ? new Set(codeViewFiles.map(({ fileKey }) => fileKey))
+          : EMPTY_COLLAPSED_DIFF_FILE_KEYS,
+      });
+    },
+    [codeViewFiles, collapseScopeKey],
+  );
+
+  const refreshDiff = useCallback(() => {
+    gitStatusQuery.refresh();
+    primaryBranchDiffPreview.refresh();
+    fallbackBranchDiffPreview.refresh();
+    localBranchRefs.refresh();
+    remoteBranchRefs.refresh();
+  }, [
+    fallbackBranchDiffPreview,
+    gitStatusQuery,
+    localBranchRefs,
+    primaryBranchDiffPreview,
+    remoteBranchRefs,
+  ]);
+
+  const copyGitApplyCommand = useCallback(async () => {
+    const command = "git diff --no-ext-diff | git apply --3way";
+    try {
+      await navigator.clipboard.writeText(command);
+    } catch {
+      return;
+    }
+  }, []);
+
   const focusDiffFile = useCallback(
     (filePath: string, fileKey: string) => {
       if (selectedTurnId !== null && routeThreadRef) {
@@ -778,6 +810,98 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={
+                  collapsedDiffFileKeys.size === codeViewFiles.length && codeViewFiles.length > 0
+                    ? "Expand all diffs"
+                    : "Collapse all diffs"
+                }
+                onClick={() =>
+                  setAllDiffFilesCollapsed(
+                    !(
+                      collapsedDiffFileKeys.size === codeViewFiles.length &&
+                      codeViewFiles.length > 0
+                    ),
+                  )
+                }
+              />
+            }
+          >
+            <ChevronsUpDownIcon className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            {collapsedDiffFileKeys.size === codeViewFiles.length && codeViewFiles.length > 0
+              ? "Expand all diffs"
+              : "Collapse all diffs"}
+          </TooltipPopup>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                  filesPanelOpen && "bg-muted/70 text-foreground",
+                )}
+                aria-label={filesPanelOpen ? "Hide changed files" : "Show changed files"}
+                aria-pressed={filesPanelOpen}
+                onClick={() => setFilesPanelOpen((open) => !open)}
+              />
+            }
+          >
+            <FolderTreeIcon className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">{filesPanelOpen ? "Hide files" : "Show files"}</TooltipPopup>
+        </Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Diff options"
+          >
+            <EllipsisIcon className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuItem onClick={refreshDiff}>
+              <RefreshCwIcon />
+              Refresh
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={wordWrap} onCheckedChange={setWordWrap}>
+              <TextWrapIcon />
+              Enable word wrap
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={wordDiffs} onCheckedChange={setWordDiffs}>
+              <PilcrowIcon />
+              Enable word diffs
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={diffIgnoreWhitespace}
+              onCheckedChange={setDiffIgnoreWhitespace}
+            >
+              <PilcrowIcon />
+              Hide whitespace
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuItem disabled>
+              <Rows3Icon />
+              Don&apos;t load full files
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              <SearchIcon />
+              Enable rich preview
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void copyGitApplyCommand()}>
+              <CopyIcon />
+              Copy git apply command
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <ToggleGroup
           className="shrink-0"
           variant="outline"
@@ -790,10 +914,10 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
             }
           }}
         >
-          <Toggle aria-label="Stacked diff view" value="stacked">
+          <Toggle title="Unified diff" aria-label="Unified diff" value="stacked">
             <Rows3Icon className="size-3" />
           </Toggle>
-          <Toggle aria-label="Split diff view" value="split">
+          <Toggle title="Split diff" aria-label="Split diff" value="split">
             <Columns2Icon className="size-3" />
           </Toggle>
         </ToggleGroup>
@@ -879,54 +1003,58 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
       ) : (
         <>
           <div className="relative flex min-h-0 min-w-0 flex-1">
-            <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-card/20 md:flex">
-              <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/70 px-3 text-xs">
-                <span className="font-medium text-foreground">Changed files</span>
-                <span className="tabular-nums text-muted-foreground">{reviewTreeFiles.length}</span>
-              </div>
-              <div className="relative mx-2 my-2 shrink-0">
-                <SearchIcon className="pointer-events-none absolute top-1.5 left-2 size-3.5 text-muted-foreground" />
-                <input
-                  type="search"
-                  value={fileFilter}
-                  onChange={(event) => setFileFilter(event.target.value)}
-                  placeholder="Filter files..."
-                  aria-label="Filter changed files"
-                  className="h-7 w-full rounded-md border border-border/70 bg-background px-7 text-xs outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 pb-2">
-                {filteredReviewTreeFiles.length === 0 ? (
-                  <p className="px-2 py-4 text-[11px] text-muted-foreground/70">
-                    {fileFilter ? "No matching files." : "No changed files."}
-                  </p>
-                ) : (
-                  <ChangedFilesTreeView
-                    files={filteredReviewTreeFiles}
-                    allDirectoriesExpanded={allNavigatorDirectoriesExpanded}
-                    resolvedTheme={resolvedTheme}
-                    activeFilePath={selectedFilePath}
-                    statusByPath={reviewStatusByPath}
-                    getStatusLabel={diffStatusName}
-                    getStatusClassName={diffStatusClassName}
-                    onOpenFile={(filePath) => {
-                      const file = codeViewFiles.find(
-                        (candidate) => candidate.filePath === filePath,
-                      );
-                      if (file) focusDiffFile(filePath, file.fileKey);
-                    }}
+            {filesPanelOpen ? (
+              <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-card/20 md:flex">
+                <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/70 px-3 text-xs">
+                  <span className="font-medium text-foreground">Changed files</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {reviewTreeFiles.length}
+                  </span>
+                </div>
+                <div className="relative mx-2 my-2 shrink-0">
+                  <SearchIcon className="pointer-events-none absolute top-1.5 left-2 size-3.5 text-muted-foreground" />
+                  <input
+                    type="search"
+                    value={fileFilter}
+                    onChange={(event) => setFileFilter(event.target.value)}
+                    placeholder="Filter files..."
+                    aria-label="Filter changed files"
+                    className="h-7 w-full rounded-md border border-border/70 bg-background px-7 text-xs outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                )}
-              </div>
-              <button
-                type="button"
-                className="flex h-8 shrink-0 items-center gap-1 border-t border-border/70 px-3 text-[11px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                onClick={() => setAllNavigatorDirectoriesExpanded((value) => !value)}
-              >
-                <ChevronsUpDownIcon className="size-3.5" />
-                {allNavigatorDirectoriesExpanded ? "Collapse folders" : "Expand folders"}
-              </button>
-            </aside>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 pb-2">
+                  {filteredReviewTreeFiles.length === 0 ? (
+                    <p className="px-2 py-4 text-[11px] text-muted-foreground/70">
+                      {fileFilter ? "No matching files." : "No changed files."}
+                    </p>
+                  ) : (
+                    <ChangedFilesTreeView
+                      files={filteredReviewTreeFiles}
+                      allDirectoriesExpanded={allNavigatorDirectoriesExpanded}
+                      resolvedTheme={resolvedTheme}
+                      activeFilePath={selectedFilePath}
+                      statusByPath={reviewStatusByPath}
+                      getStatusLabel={diffStatusName}
+                      getStatusClassName={diffStatusClassName}
+                      onOpenFile={(filePath) => {
+                        const file = codeViewFiles.find(
+                          (candidate) => candidate.filePath === filePath,
+                        );
+                        if (file) focusDiffFile(filePath, file.fileKey);
+                      }}
+                    />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="flex h-8 shrink-0 items-center gap-1 border-t border-border/70 px-3 text-[11px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                  onClick={() => setAllNavigatorDirectoriesExpanded((value) => !value)}
+                >
+                  <ChevronsUpDownIcon className="size-3.5" />
+                  {allNavigatorDirectoriesExpanded ? "Collapse folders" : "Expand folders"}
+                </button>
+              </aside>
+            ) : null}
             <div className="diff-panel-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {isSelectedPatchTruncated && (
                 <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
@@ -1017,7 +1145,7 @@ export default function DiffPanel({ mode = "inline", composerDraftTarget }: Diff
                     }}
                     options={{
                       diffStyle: diffRenderMode === "split" ? "split" : "unified",
-                      lineDiffType: "none",
+                      lineDiffType: wordDiffs ? "word" : "none",
                       overflow: wordWrap ? "wrap" : "scroll",
                       theme: resolveDiffThemeName(resolvedTheme),
                       themeType: resolvedTheme as DiffThemeType,

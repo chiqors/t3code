@@ -21,10 +21,7 @@ import {
   RuntimeMode,
   TerminalOpenInput,
 } from "@t3tools/contracts";
-import {
-  connectionStatusText,
-  type EnvironmentConnectionPresentation,
-} from "@t3tools/client-runtime/connection";
+import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
 import {
   parseScopedThreadKey,
   scopedThreadKey,
@@ -299,6 +296,24 @@ type EnvironmentUnavailableState = {
   readonly label: string;
   readonly connection: EnvironmentConnectionPresentation;
 };
+
+function environmentConnectionBannerTitle(
+  label: string,
+  connection: EnvironmentConnectionPresentation,
+): string {
+  switch (connection.phase) {
+    case "connecting":
+      return `${label}: Connecting...`;
+    case "reconnecting":
+      return `${label}: Reconnecting...`;
+    case "offline":
+      return `${label}: Offline`;
+    case "error":
+      return `${label}: Connection unavailable`;
+    default:
+      return `${label}: Connection unavailable`;
+  }
+}
 
 type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
 
@@ -1101,6 +1116,7 @@ function ChatViewContent(props: ChatViewProps) {
   const localComposerRef = useRef<ChatComposerHandle | null>(null);
   const composerRef = useComposerHandleContext() ?? localComposerRef;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [isAppClosing, setIsAppClosing] = useState(false);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
@@ -1111,6 +1127,16 @@ function ChatViewContent(props: ChatViewProps) {
   const [localServerErrorsByThreadKey, setLocalServerErrorsByThreadKey] = useState<
     Record<string, string | null>
   >({});
+
+  useEffect(() => {
+    const markAppClosing = () => setIsAppClosing(true);
+    window.addEventListener("beforeunload", markAppClosing);
+    window.addEventListener("pagehide", markAppClosing);
+    return () => {
+      window.removeEventListener("beforeunload", markAppClosing);
+      window.removeEventListener("pagehide", markAppClosing);
+    };
+  }, []);
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
@@ -1439,7 +1465,12 @@ function ChatViewContent(props: ChatViewProps) {
     activeEnvironment !== null && activeEnvironmentConnectionPhase !== "connected";
   const activeEnvironmentUnavailableLabel = activeEnvironment?.label ?? null;
   const activeEnvironmentUnavailableState = useMemo<EnvironmentUnavailableState | null>(() => {
-    if (!activeEnvironmentUnavailable || !activeEnvironmentUnavailableLabel || !activeEnvironment) {
+    if (
+      isAppClosing ||
+      !activeEnvironmentUnavailable ||
+      !activeEnvironmentUnavailableLabel ||
+      !activeEnvironment
+    ) {
       return null;
     }
 
@@ -1448,7 +1479,12 @@ function ChatViewContent(props: ChatViewProps) {
       label: activeEnvironmentUnavailableLabel,
       connection: activeEnvironment.connection,
     };
-  }, [activeEnvironment, activeEnvironmentUnavailable, activeEnvironmentUnavailableLabel]);
+  }, [
+    activeEnvironment,
+    activeEnvironmentUnavailable,
+    activeEnvironmentUnavailableLabel,
+    isAppClosing,
+  ]);
   const handleReconnectActiveEnvironment = useCallback(
     async (environmentId: EnvironmentId) => {
       const result = await retryEnvironment(environmentId);
@@ -1667,7 +1703,10 @@ function ChatViewContent(props: ChatViewProps) {
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
         variant: connection.phase === "error" ? "error" : "warning",
         icon: <WifiOffIcon />,
-        title: `${activeEnvironmentUnavailableState.label}: ${connectionStatusText(connection)}`,
+        title: environmentConnectionBannerTitle(
+          activeEnvironmentUnavailableState.label,
+          connection,
+        ),
         description:
           connection.error ??
           "Reconnect this environment before sending messages or running actions.",
@@ -5042,11 +5081,11 @@ function ChatViewContent(props: ChatViewProps) {
         <EnvironmentInfoPanel
           environmentId={activeThread.environmentId}
           gitStatus={gitStatusQuery.data ?? null}
-          activities={activeThread?.activities ?? EMPTY_ACTIVITIES}
           sources={conversationSources}
           gitCwd={gitCwd}
           activeThreadRef={activeThreadRef}
           {...(routeKind === "draft" && draftId ? { draftId } : {})}
+          onOpenChanges={addDiffSurface}
           onOpenSources={addSourcesSurface}
           onOpenProcesses={addProcessesSurface}
           rightPanelOpen={rightPanelOpen}
