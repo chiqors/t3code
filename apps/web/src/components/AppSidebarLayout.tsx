@@ -17,7 +17,7 @@ const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 
 function SidebarControl() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const { toggleSidebar } = useSidebar();
+  const { isMobile, state, toggleSidebar } = useSidebar();
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
 
   useEffect(() => {
@@ -33,6 +33,10 @@ function SidebarControl() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keybindings, toggleSidebar]);
+
+  if (isElectron && !isMobile && state === "expanded") {
+    return null;
+  }
 
   return (
     <div
