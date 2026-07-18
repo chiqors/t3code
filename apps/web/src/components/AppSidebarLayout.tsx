@@ -6,7 +6,9 @@ import { isElectron } from "../env";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
+import { useClientSettings } from "../hooks/useSettings";
 import ThreadSidebar from "./Sidebar";
+import ThreadSidebarV2 from "./SidebarV2";
 import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
@@ -59,9 +61,14 @@ function SidebarControl() {
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const sidebarV2Enabled = useClientSettings((settings) => settings.sidebarV2Enabled);
   const pathname = useLocation({ select: (location) => location.pathname });
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+  // Settings routes render the settings nav, which lives in the v1 component
+  // and is identical for both sidebars, so v1 stays mounted there.
+  const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  const useSidebarV2 = sidebarV2Enabled && !isOnSettings;
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(() => {
     const getWindowFullscreenState = window.desktopBridge?.getWindowFullscreenState;
@@ -116,7 +123,13 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="border-r border-border bg-card text-foreground"
+        className={
+          // v2 is a raised panel against the pure-black canvas: its card
+          // surface lets the bordered thread cards read as set into it.
+          useSidebarV2
+            ? "border-r border-black/15 bg-neutral-100 text-foreground dark:border-white/10 dark:bg-card"
+            : "border-r border-border bg-card text-foreground"
+        }
         resizable={{
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>
@@ -124,7 +137,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
         }}
       >
-        <ThreadSidebar />
+        {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
         <SidebarRail />
       </Sidebar>
       {children}
