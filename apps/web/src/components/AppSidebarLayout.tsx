@@ -11,11 +11,12 @@ import ThreadSidebar from "./Sidebar";
 import ThreadSidebarV2 from "./SidebarV2";
 import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { zoomCompensatedInsetPx } from "~/workspaceTitlebar";
 
 const THREAD_SIDEBAR_WIDTH_STORAGE_KEY = "chat_thread_sidebar_width";
 const THREAD_SIDEBAR_MIN_WIDTH = 13 * 16;
 const THREAD_MAIN_CONTENT_MIN_WIDTH = 40 * 16;
-const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
+const MACOS_TRAFFIC_LIGHTS_LEFT_INSET_PX = 90;
 
 function SidebarControl() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -42,7 +43,7 @@ function SidebarControl() {
 
   return (
     <div
-      className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center"
+      className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-controls-height)] items-center"
       data-sidebar-control=""
     >
       <Tooltip>
@@ -76,9 +77,67 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       ? getWindowFullscreenState()
       : false;
   });
+  const initialDevicePixelRatioRef = useRef(
+    typeof window.devicePixelRatio === "number" && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1,
+  );
+  const initialZoomFactorRef = useRef(
+    (() => {
+      const zoomFactor = window.desktopBridge?.getWindowZoomFactor?.();
+      return typeof zoomFactor === "number" && Number.isFinite(zoomFactor) && zoomFactor > 0
+        ? zoomFactor
+        : 1;
+    })(),
+  );
+  const [zoomFactor, setZoomFactor] = useState(initialZoomFactorRef.current);
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    const updateZoomFactor = () => {
+      const bridgeZoomFactor = bridge?.getWindowZoomFactor?.();
+      if (
+        typeof bridgeZoomFactor === "number" &&
+        Number.isFinite(bridgeZoomFactor) &&
+        bridgeZoomFactor > 0
+      ) {
+        setZoomFactor(bridgeZoomFactor);
+        return;
+      }
+      const nextDevicePixelRatio = window.devicePixelRatio;
+      if (
+        typeof nextDevicePixelRatio === "number" &&
+        Number.isFinite(nextDevicePixelRatio) &&
+        nextDevicePixelRatio > 0
+      ) {
+        setZoomFactor(nextDevicePixelRatio / initialDevicePixelRatioRef.current);
+      }
+    };
+    const viewport = window.visualViewport;
+    window.addEventListener("resize", updateZoomFactor);
+    viewport?.addEventListener("resize", updateZoomFactor);
+    const unsubscribe = bridge?.onWindowZoomFactorChange?.(setZoomFactor);
+    updateZoomFactor();
+    return () => {
+      window.removeEventListener("resize", updateZoomFactor);
+      viewport?.removeEventListener("resize", updateZoomFactor);
+      unsubscribe?.();
+    };
+  }, []);
   const macosWindowControlsStyle =
     isMacosDesktop && !isWindowFullscreen
-      ? ({ "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET } as CSSProperties)
+      ? ({
+          // Electron's native traffic lights stay in physical window
+          // coordinates while Chromium scales CSS pixels with page zoom.
+          // Keep the whole renderer titlebar at the native physical height,
+          // not only the floating controls and collapsed-sidebar trigger.
+          "--workspace-topbar-height": zoomCompensatedInsetPx(52, 1, zoomFactor),
+          "--workspace-controls-left": zoomCompensatedInsetPx(
+            MACOS_TRAFFIC_LIGHTS_LEFT_INSET_PX,
+            1,
+            zoomFactor,
+          ),
+          "--workspace-controls-height": zoomCompensatedInsetPx(52, 1, zoomFactor),
+        } as CSSProperties)
       : undefined;
 
   useEffect(() => {

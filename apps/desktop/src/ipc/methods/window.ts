@@ -65,6 +65,16 @@ export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
   }),
 });
 
+export const getWindowZoomFactor = DesktopIpc.makeSyncIpcMethod({
+  channel: IpcChannels.GET_WINDOW_ZOOM_FACTOR_CHANNEL,
+  result: Schema.Number,
+  handler: Effect.fn("desktop.ipc.window.getWindowZoomFactor")(function* () {
+    const electronWindow = yield* ElectronWindow.ElectronWindow;
+    const window = yield* electronWindow.currentMainOrFirst;
+    return Option.isSome(window) ? window.value.webContents.getZoomFactor() : 1;
+  }),
+});
+
 export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
   channel: IpcChannels.GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL,
   result: Schema.Array(DesktopEnvironmentBootstrapSchema),

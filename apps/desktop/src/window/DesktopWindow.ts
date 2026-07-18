@@ -15,7 +15,11 @@ import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
-import { MENU_ACTION_CHANNEL, WINDOW_FULLSCREEN_STATE_CHANNEL } from "../ipc/channels.ts";
+import {
+  MENU_ACTION_CHANNEL,
+  WINDOW_FULLSCREEN_STATE_CHANNEL,
+  WINDOW_ZOOM_FACTOR_CHANGED_CHANNEL,
+} from "../ipc/channels.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 
 const TITLEBAR_HEIGHT = 40;
@@ -336,6 +340,14 @@ export const make = Effect.gen(function* () {
       );
 
       void runPromise(electronMenu.popupTemplate({ window, template: menuTemplate }));
+    });
+    window.webContents.on("zoom-changed", () => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(
+          WINDOW_ZOOM_FACTOR_CHANGED_CHANNEL,
+          window.webContents.getZoomFactor(),
+        );
+      }
     });
 
     window.webContents.setWindowOpenHandler(({ url }) => {

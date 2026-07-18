@@ -118,6 +118,10 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   getWindowFullscreenState: () =>
     ipcRenderer.sendSync(IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL) === true,
+  getWindowZoomFactor: () => {
+    const zoomFactor = ipcRenderer.sendSync(IpcChannels.GET_WINDOW_ZOOM_FACTOR_CHANNEL);
+    return typeof zoomFactor === "number" && Number.isFinite(zoomFactor) ? zoomFactor : 1;
+  },
   onWindowFullscreenStateChange: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, fullscreen: unknown) => {
       if (typeof fullscreen !== "boolean") return;
@@ -127,6 +131,16 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.on(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
     return () => {
       ipcRenderer.removeListener(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
+    };
+  },
+  onWindowZoomFactorChange: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, zoomFactor: unknown) => {
+      if (typeof zoomFactor !== "number" || !Number.isFinite(zoomFactor) || zoomFactor <= 0) return;
+      listener(zoomFactor);
+    };
+    ipcRenderer.on(IpcChannels.WINDOW_ZOOM_FACTOR_CHANGED_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.WINDOW_ZOOM_FACTOR_CHANGED_CHANNEL, wrappedListener);
     };
   },
   getUpdateState: () => ipcRenderer.invoke(IpcChannels.UPDATE_GET_STATE_CHANNEL),
