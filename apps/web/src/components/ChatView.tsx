@@ -5032,22 +5032,25 @@ function ChatViewContent(props: ChatViewProps) {
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {rightPanelOpen && !shouldUsePlanSidebarSheet ? panelLayoutControls : null}
-      <EnvironmentInfoPanel
-        environmentId={activeThread.environmentId}
-        gitStatus={gitStatusQuery.data ?? null}
-        activities={activeThread?.activities ?? EMPTY_ACTIVITIES}
-        sources={conversationSources}
-        onOpenSources={addSourcesSurface}
-        onOpenProcesses={addProcessesSurface}
-        rightPanelOpen={rightPanelOpen}
-      />
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
+          "relative flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
       >
+        <EnvironmentInfoPanel
+          environmentId={activeThread.environmentId}
+          gitStatus={gitStatusQuery.data ?? null}
+          activities={activeThread?.activities ?? EMPTY_ACTIVITIES}
+          sources={conversationSources}
+          gitCwd={gitCwd}
+          activeThreadRef={activeThreadRef}
+          {...(routeKind === "draft" && draftId ? { draftId } : {})}
+          onOpenSources={addSourcesSurface}
+          onOpenProcesses={addProcessesSurface}
+          rightPanelOpen={rightPanelOpen}
+        />
         {/* Top bar */}
         <header
           data-chat-header
@@ -5067,8 +5070,6 @@ function ChatViewContent(props: ChatViewProps) {
           {!rightPanelOpen ? panelLayoutControls : null}
           <ChatHeader
             activeThreadEnvironmentId={activeThread.environmentId}
-            activeThreadId={activeThread.id}
-            {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
             activeProjectName={activeProject?.title}
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
@@ -5080,7 +5081,6 @@ function ChatViewContent(props: ChatViewProps) {
             keybindings={keybindings}
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
-            gitCwd={gitCwd}
             onRunProjectScript={runProjectScript}
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}

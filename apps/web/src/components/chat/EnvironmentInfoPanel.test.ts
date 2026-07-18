@@ -7,8 +7,8 @@ describe("shouldShowEnvironmentInfoPanel", () => {
     expect(shouldShowEnvironmentInfoPanel(true, false)).toBe(true);
   });
 
-  it("temporarily hides it while the right panel is open", () => {
-    expect(shouldShowEnvironmentInfoPanel(true, true)).toBe(false);
+  it("stays available beside the right panel", () => {
+    expect(shouldShowEnvironmentInfoPanel(true, true)).toBe(true);
   });
 
   it("respects an explicit hidden preference", () => {

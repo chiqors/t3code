@@ -1,6 +1,7 @@
 import type {
   EnvironmentId,
   OrchestrationThreadActivity,
+  ScopedThreadRef,
   VcsStatusResult,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -28,6 +29,7 @@ import { useEnvironment } from "../../state/environments";
 import { useKnownTerminalSessions } from "../../state/terminalSessions";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { type DraftId } from "../../composerDraftStore";
 import { cn } from "~/lib/utils";
 import { faviconUrlForOrigin } from "~/lib/favicon";
 import type { ConversationSource } from "./conversationSources";
@@ -35,6 +37,7 @@ import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import GitActionsControl from "../GitActionsControl";
 
 const ENVIRONMENT_INFO_PANEL_OPEN_KEY = "chat_environment_info_open";
 const ENVIRONMENT_INFO_PANEL_COLLAPSED_KEY = "chat_environment_info_collapsed";
@@ -45,6 +48,9 @@ interface EnvironmentInfoPanelProps {
   gitStatus: VcsStatusResult | null;
   activities: ReadonlyArray<OrchestrationThreadActivity>;
   sources: ReadonlyArray<ConversationSource>;
+  gitCwd: string | null;
+  activeThreadRef: ScopedThreadRef | null;
+  draftId?: DraftId;
   onOpenSources: () => void;
   onOpenProcesses: () => void;
   rightPanelOpen: boolean;
@@ -116,19 +122,19 @@ function InfoRow({
   onClick?: () => void;
 }) {
   const content = (
-    <span className="flex min-h-9 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70">
+    <div className="flex min-h-9 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70">
       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {value ? <span className="max-w-44 truncate text-muted-foreground">{value}</span> : null}
       {trailing ?? <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground/60" />}
-    </span>
+    </div>
   );
   return onClick ? (
     <button type="button" className="w-full" onClick={onClick}>
       {content}
     </button>
   ) : (
-    <span className="block w-full">{content}</span>
+    <div className="block w-full">{content}</div>
   );
 }
 
@@ -142,21 +148,19 @@ function useEnvironmentInfoPanelCollapsed() {
 
 export function shouldShowEnvironmentInfoPanel(
   preferredOpen: boolean,
-  rightPanelOpen: boolean,
+  _rightPanelOpen: boolean,
 ): boolean {
-  return preferredOpen && !rightPanelOpen;
+  return preferredOpen;
 }
 
 export function EnvironmentInfoToggle({ rightPanelOpen }: { rightPanelOpen: boolean }) {
   const [open, setOpen] = useEnvironmentInfoPanelOpen();
   const compactWindow = useMediaQuery("max-xl");
-  const label = rightPanelOpen
-    ? "Environment information is hidden while the right panel is open"
-    : compactWindow
-      ? "Environment information will return when the window is wider"
-      : open
-        ? "Hide environment information"
-        : "Show environment information";
+  const label = compactWindow
+    ? "Environment information will return when the window is wider"
+    : open
+      ? "Hide environment information"
+      : "Show environment information";
 
   return (
     <Tooltip>
@@ -168,7 +172,6 @@ export function EnvironmentInfoToggle({ rightPanelOpen }: { rightPanelOpen: bool
             pressed={!compactWindow && shouldShowEnvironmentInfoPanel(open, rightPanelOpen)}
             onPressedChange={setOpen}
             aria-label={label}
-            disabled={rightPanelOpen}
             data-testid="environment-info-trigger"
           >
             <SlidersHorizontalIcon className="size-3.5" />
@@ -185,6 +188,9 @@ export function EnvironmentInfoPanel({
   gitStatus,
   activities,
   sources,
+  gitCwd,
+  activeThreadRef,
+  draftId,
   onOpenSources,
   onOpenProcesses,
   rightPanelOpen,
@@ -300,7 +306,13 @@ export function EnvironmentInfoPanel({
               <InfoRow
                 icon={GitCommitIcon}
                 label="Commit or push"
-                trailing={<ArrowUpRightIcon className="size-3.5 text-muted-foreground/60" />}
+                trailing={
+                  <GitActionsControl
+                    gitCwd={gitCwd}
+                    activeThreadRef={activeThreadRef}
+                    {...(draftId ? { draftId } : {})}
+                  />
+                }
               />
               <InfoRow
                 icon={GitCompareArrowsIcon}
