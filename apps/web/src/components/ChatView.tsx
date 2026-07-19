@@ -203,6 +203,7 @@ import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import { TurnChangesToast } from "./chat/TurnChangesToast";
 import { ChatHeader } from "./chat/ChatHeader";
 import { EnvironmentInfoPanel } from "./chat/EnvironmentInfoPanel";
 import { deriveConversationSources } from "./chat/conversationSources";
@@ -2317,6 +2318,33 @@ function ChatViewContent(props: ChatViewProps) {
   ] = useDraftHeroLayoutTransition(isDraftHeroState);
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
+  const latestChangedTurnSummary = useMemo(() => {
+    const changedSummaries = turnDiffSummaries.filter(
+      (summary) => summary.status === "ready" && summary.files.length > 0,
+    );
+    return (
+      changedSummaries.toSorted((left, right) => {
+        const leftTurnCount =
+          left.checkpointTurnCount ?? inferredCheckpointTurnCountByTurnId[left.turnId] ?? 0;
+        const rightTurnCount =
+          right.checkpointTurnCount ?? inferredCheckpointTurnCountByTurnId[right.turnId] ?? 0;
+        if (leftTurnCount !== rightTurnCount) return rightTurnCount - leftTurnCount;
+        return right.completedAt.localeCompare(left.completedAt);
+      })[0] ?? null
+    );
+  }, [inferredCheckpointTurnCountByTurnId, turnDiffSummaries]);
+  const activeChangedTurnSummary = useMemo(() => {
+    if (latestTurnSettled || !activeLatestTurn) return null;
+    return latestChangedTurnSummary?.turnId === activeLatestTurn.turnId
+      ? latestChangedTurnSummary
+      : null;
+  }, [activeLatestTurn, latestChangedTurnSummary, latestTurnSettled]);
+  const [dismissedChangesToastTurnId, setDismissedChangesToastTurnId] = useState<TurnId | null>(
+    null,
+  );
+  useEffect(() => {
+    setDismissedChangesToastTurnId(null);
+  }, [activeThread?.id]);
   const latestUndoableTurnId = useMemo(() => {
     let latestSummary: TurnDiffSummary | null = null;
     for (const summary of turnDiffSummaries) {
@@ -6010,6 +6038,7 @@ function ChatViewContent(props: ChatViewProps) {
                     : null
                 }
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
+                turnDiffSummaries={turnDiffSummaries}
                 activeThreadEnvironmentId={activeThread.environmentId}
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
@@ -6131,6 +6160,23 @@ function ChatViewContent(props: ChatViewProps) {
                         onSteer={onSteerQueuedMessage}
                         onOpenSideChat={onOpenQueuedMessageSideChat}
                         onToggleQueue={() => setQueueEnabled(routeThreadRef, !queueEnabled)}
+                      />
+                    ) : null}
+                    {activeChangedTurnSummary &&
+                    dismissedChangesToastTurnId !== activeChangedTurnSummary.turnId ? (
+                      <TurnChangesToast
+                        summary={activeChangedTurnSummary}
+                        bottomOffset={0}
+                        placement="composer"
+                        onOpen={() =>
+                          onOpenTurnDiff(
+                            activeChangedTurnSummary.turnId,
+                            activeChangedTurnSummary.files[0]?.path,
+                          )
+                        }
+                        onDismiss={() =>
+                          setDismissedChangesToastTurnId(activeChangedTurnSummary.turnId)
+                        }
                       />
                     ) : null}
                     <div

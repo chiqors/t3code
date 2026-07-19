@@ -14,6 +14,49 @@ import { Button } from "../ui/button";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
 
+function changeStatusLabel(kind: string): string {
+  switch (kind.toLowerCase()) {
+    case "new":
+    case "added":
+      return "A";
+    case "deleted":
+    case "removed":
+      return "D";
+    case "rename-pure":
+    case "rename-changed":
+    case "renamed":
+      return "R";
+    default:
+      return "M";
+  }
+}
+
+function changeStatusName(status: string): string {
+  switch (status) {
+    case "A":
+      return "Added";
+    case "D":
+      return "Deleted";
+    case "R":
+      return "Renamed";
+    default:
+      return "Modified";
+  }
+}
+
+function changeStatusClassName(status: string): string {
+  switch (status) {
+    case "A":
+      return "border-success/30 bg-success/10 text-success";
+    case "D":
+      return "border-destructive/30 bg-destructive/10 text-destructive";
+    case "R":
+      return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+    default:
+      return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+}
+
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   turnId: TurnId;
   files: ReadonlyArray<TurnDiffFileChange>;
@@ -88,11 +131,21 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
   const { files, allDirectoriesExpanded, onOpenTurnDiff, resolvedTheme, turnId } = props;
+  const statusByPath = useMemo(
+    () =>
+      Object.fromEntries(
+        files.map((file) => [file.path.replaceAll("\\", "/"), changeStatusLabel(file.kind)]),
+      ),
+    [files],
+  );
   return (
     <ChangedFilesTreeView
       files={files}
       allDirectoriesExpanded={allDirectoriesExpanded}
       resolvedTheme={resolvedTheme}
+      statusByPath={statusByPath}
+      getStatusLabel={changeStatusName}
+      getStatusClassName={changeStatusClassName}
       onOpenFile={(filePath) => onOpenTurnDiff(turnId, filePath)}
     />
   );
@@ -183,7 +236,11 @@ export const ChangedFilesTreeView = memo(function ChangedFilesTreeView(props: {
             </span>
             {hasNonZeroStat(node.stat) && (
               <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
-                <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+                <DiffStatLabel
+                  additions={node.stat.additions}
+                  deletions={node.stat.deletions}
+                  layout="inline"
+                />
               </span>
             )}
           </button>
@@ -234,7 +291,11 @@ export const ChangedFilesTreeView = memo(function ChangedFilesTreeView(props: {
         ) : null}
         {node.stat && (
           <span className={cn("shrink-0 font-mono text-[10px] tabular-nums", !status && "ml-auto")}>
-            <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+            <DiffStatLabel
+              additions={node.stat.additions}
+              deletions={node.stat.deletions}
+              layout="inline"
+            />
           </span>
         )}
       </button>

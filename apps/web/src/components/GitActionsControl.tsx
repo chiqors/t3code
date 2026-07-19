@@ -1761,9 +1761,7 @@ export default function GitActionsControl({
             aria-label={`${sourceControlPresentation.providerName} actions`}
           >
             <SourceControlIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">
-              {sourceControlPresentation.providerName}
-            </span>
+            <span className="min-w-0 flex-1 truncate">Remote actions</span>
             <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
           </MenuTrigger>
           <MenuPopup side="left" align="start" sideOffset={6} className="min-w-52">

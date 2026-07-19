@@ -28,6 +28,7 @@ import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import GitActionsControl from "../GitActionsControl";
 import { BranchToolbarBranchSelector } from "../BranchToolbarBranchSelector";
+import { DiffStatLabel } from "./DiffStatLabel";
 
 // Reset the pre-cleanup preference once so existing sessions start with the panel visible.
 const ENVIRONMENT_INFO_PANEL_OPEN_KEY = "chat_environment_info_open_v2";
@@ -253,16 +254,16 @@ export function EnvironmentInfoPanel({
             <div>
               <InfoRow
                 icon={ListFilterIcon}
-                label="Changes"
+                label="Workspace changes"
                 onClick={onOpenChanges}
                 trailing={
-                  changes ? (
-                    <span className="text-xs font-medium">
-                      <span className="text-emerald-500">
-                        +{changes.insertions.toLocaleString()}
-                      </span>{" "}
-                      <span className="text-rose-500">-{changes.deletions.toLocaleString()}</span>
-                    </span>
+                  changes &&
+                  (changes.files.length > 0 || changes.insertions > 0 || changes.deletions > 0) ? (
+                    <DiffStatLabel
+                      additions={changes.insertions}
+                      deletions={changes.deletions}
+                      layout="inline"
+                    />
                   ) : undefined
                 }
               />
@@ -298,12 +299,14 @@ export function EnvironmentInfoPanel({
                 {...(draftId ? { draftId } : {})}
                 variant="git"
               />
-              <GitActionsControl
-                gitCwd={gitCwd}
-                activeThreadRef={activeThreadRef}
-                {...(draftId ? { draftId } : {})}
-                variant="provider"
-              />
+              {gitStatus?.sourceControlProvider && gitStatus.hasPrimaryRemote ? (
+                <GitActionsControl
+                  gitCwd={gitCwd}
+                  activeThreadRef={activeThreadRef}
+                  {...(draftId ? { draftId } : {})}
+                  variant="provider"
+                />
+              ) : null}
             </div>
 
             {backgroundProcesses.length > 0 || sources.length > 0 ? <Separator /> : null}

@@ -131,6 +131,7 @@ interface TimelineRowSharedState {
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  turnDiffSummariesByTurnId: ReadonlyMap<TurnId, TurnDiffSummary>;
   activeThreadEnvironmentId: EnvironmentId;
   latestUndoableTurnId: TurnId | null;
   latestEditableUserMessageId: MessageId | null;
@@ -165,6 +166,7 @@ const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const EMPTY_TURN_DIFF_SUMMARIES: ReadonlyArray<TurnDiffSummary> = [];
 const EMPTY_CONTINUE_IN_NEW_CHAT = () => {};
 
 // ---------------------------------------------------------------------------
@@ -180,6 +182,7 @@ interface MessagesTimelineProps {
   latestTurn: TimelineLatestTurn | null;
   runningTurnId: TurnId | null;
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
+  turnDiffSummaries?: ReadonlyArray<TurnDiffSummary>;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onContinueInNewChat?: (input: {
@@ -229,6 +232,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   latestTurn,
   runningTurnId,
   turnDiffSummaryByAssistantMessageId,
+  turnDiffSummaries = EMPTY_TURN_DIFF_SUMMARIES,
   routeThreadKey,
   onOpenTurnDiff,
   onContinueInNewChat = EMPTY_CONTINUE_IN_NEW_CHAT,
@@ -364,6 +368,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     ],
   );
   const rows = useStableRows(rawRows);
+  const turnDiffSummariesByTurnId = useMemo(
+    () => new Map(turnDiffSummaries.map((summary) => [summary.turnId, summary] as const)),
+    [turnDiffSummaries],
+  );
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
@@ -462,6 +470,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       skills,
+      turnDiffSummariesByTurnId,
       activeThreadEnvironmentId,
       latestUndoableTurnId,
       latestEditableUserMessageId,
@@ -487,6 +496,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       skills,
+      turnDiffSummariesByTurnId,
       activeThreadEnvironmentId,
       latestUndoableTurnId,
       latestEditableUserMessageId,
@@ -1514,6 +1524,7 @@ function AssistantChangedFilesSectionInner({
   );
   const summaryStat = summarizeTurnDiffStats(checkpointFiles);
   const changedFileLabel = `${checkpointFiles.length} ${checkpointFiles.length === 1 ? "file" : "files"}`;
+  const changedFileAction = resolveChangedFileAction(checkpointFiles);
 
   return (
     <div className="mt-2 overflow-hidden rounded-lg border border-border/80 bg-card/45">
@@ -1523,10 +1534,19 @@ function AssistantChangedFilesSectionInner({
             <SquarePenIcon className="size-4" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">Edited {changedFileLabel}</p>
-            {hasNonZeroStat(summaryStat) ? (
-              <DiffStatLabel additions={summaryStat.additions} deletions={summaryStat.deletions} />
-            ) : null}
+            <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <span className="truncate">
+                {changedFileAction} {changedFileLabel}
+              </span>
+              {hasNonZeroStat(summaryStat) ? (
+                <DiffStatLabel
+                  additions={summaryStat.additions}
+                  deletions={summaryStat.deletions}
+                  layout="inline"
+                  className="shrink-0 text-xs"
+                />
+              ) : null}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -1564,6 +1584,30 @@ function AssistantChangedFilesSectionInner({
       </div>
     </div>
   );
+}
+
+function resolveChangedFileAction(files: ReadonlyArray<TurnDiffSummary["files"][number]>): string {
+  const kinds = files.map((file) => file.kind.toLowerCase());
+  if (kinds.length > 0 && kinds.every((kind) => kind === "new" || kind === "added")) {
+    return "Created";
+  }
+  if (kinds.length > 0 && kinds.every((kind) => kind === "deleted" || kind === "removed")) {
+    return "Deleted";
+  }
+  if (
+    kinds.length > 0 &&
+    kinds.every(
+      (kind) =>
+        kind === "modified" ||
+        kind === "changed" ||
+        kind === "rename-pure" ||
+        kind === "rename-changed" ||
+        kind === "renamed",
+    )
+  ) {
+    return "Edited";
+  }
+  return "Changed";
 }
 
 // ---------------------------------------------------------------------------
@@ -2180,6 +2224,40 @@ function toolWorkEntryHeading(workEntry: TimelineWorkEntry): string {
   return capitalizePhrase(normalizeCompactToolLabel(workEntry.toolTitle));
 }
 
+function workEntryChangeStatus(kind: string): string {
+  switch (kind.toLowerCase()) {
+    case "new":
+    case "added":
+      return "A";
+    case "deleted":
+    case "removed":
+      return "D";
+    case "rename-pure":
+    case "rename-changed":
+    case "renamed":
+      return "R";
+    default:
+      return "M";
+  }
+}
+
+function workEntryChangeStatusClassName(status: string): string {
+  switch (status) {
+    case "A":
+      return "border-success/30 bg-success/10 text-success";
+    case "D":
+      return "border-destructive/30 bg-destructive/10 text-destructive";
+    case "R":
+      return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+    default:
+      return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+}
+
+function normalizeWorkEntryPath(pathValue: string): string {
+  return pathValue.replaceAll("\\", "/");
+}
+
 const stopRowToggle = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
@@ -2187,6 +2265,7 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   workspaceRoot: string | undefined;
 }) {
   const { workEntry, workspaceRoot } = props;
+  const ctx = use(TimelineRowCtx);
   const activity = use(TimelineRowActivityCtx);
   const [expanded, setExpanded] = useState(false);
   const iconConfig = workToneIcon(workEntry.tone);
@@ -2203,6 +2282,21 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   const displayText = preview ? `${heading} - ${preview}` : heading;
   const expandedBody = buildToolCallExpandedBody(workEntry, workspaceRoot);
   const canExpand = expandedBody !== null;
+  const changedFileStats = useMemo(() => {
+    if (!workEntry.turnId || !workEntry.changedFiles?.length) return null;
+    const summary = ctx.turnDiffSummariesByTurnId.get(workEntry.turnId);
+    if (!summary) return null;
+    const changedPaths = new Set(workEntry.changedFiles.map(normalizeWorkEntryPath));
+    const files = summary.files.filter((file) =>
+      changedPaths.has(normalizeWorkEntryPath(file.path)),
+    );
+    if (files.length === 0) return null;
+    return { files, stats: summarizeTurnDiffStats(files) };
+  }, [ctx.turnDiffSummariesByTurnId, workEntry.changedFiles, workEntry.turnId]);
+  const singleFileStatus =
+    changedFileStats?.files.length === 1
+      ? workEntryChangeStatus(changedFileStats.files[0]?.kind ?? "modified")
+      : null;
   const showFailedIndicator = workEntryIndicatesToolFailure(workEntry);
   const showDestructiveRowStyle =
     showFailedIndicator &&
@@ -2267,6 +2361,34 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
               )}
             </p>
           </div>
+          {changedFileStats ? (
+            <div className="flex shrink-0 items-center gap-1 font-mono text-[10px] tabular-nums">
+              {singleFileStatus ? (
+                <span
+                  className={cn(
+                    "rounded border px-1 font-semibold leading-4",
+                    workEntryChangeStatusClassName(singleFileStatus),
+                  )}
+                  title={
+                    singleFileStatus === "A"
+                      ? "Added"
+                      : singleFileStatus === "D"
+                        ? "Deleted"
+                        : singleFileStatus === "R"
+                          ? "Renamed"
+                          : "Modified"
+                  }
+                >
+                  {singleFileStatus}
+                </span>
+              ) : null}
+              <DiffStatLabel
+                additions={changedFileStats.stats.additions}
+                deletions={changedFileStats.stats.deletions}
+                layout="inline"
+              />
+            </div>
+          ) : null}
           <div className="flex shrink-0 items-center gap-px text-muted-foreground/55">
             <span
               className="flex size-4 shrink-0 items-center justify-center"

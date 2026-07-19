@@ -4,7 +4,7 @@ import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
 
-export type SidebarStageBackdropVariant = "nightly" | "dev";
+export type SidebarStageBackdropVariant = "nightly" | "dev" | "alpha";
 
 // A wide viewBox keeps the 96-unit art height at a fixed scale while sidebar resizing reveals
 // more horizontal canvas instead of zooming the scene.
@@ -16,6 +16,7 @@ export function resolveSidebarStageBackdropVariant(
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
+  if (normalized === "alpha") return "alpha";
   return null;
 }
 
@@ -36,10 +37,147 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
   return (
     <div
       aria-hidden
-      className="sidebar-stage-backdrop pointer-events-none absolute inset-x-0 top-0 z-0 h-20 select-none overflow-hidden"
+      className="sidebar-stage-backdrop pointer-events-none absolute inset-x-0 top-0 z-0 h-24 select-none overflow-hidden"
     >
-      {variant === "nightly" ? <NightlySkyArt /> : <DevBlueprintArt />}
+      {variant === "nightly" ? (
+        <NightlySkyArt />
+      ) : variant === "dev" ? (
+        <DevBlueprintArt />
+      ) : (
+        <AlphaStudioArt />
+      )}
     </div>
+  );
+}
+
+function AlphaStudioArt() {
+  return (
+    <svg
+      className="stage-alpha h-full w-full"
+      fill="none"
+      preserveAspectRatio="xMinYMin slice"
+      viewBox={STAGE_BACKDROP_VIEW_BOX}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient
+          id="stage-alpha-base"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="96"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop style={{ stopColor: "var(--stage-alpha-top)" }} />
+          <stop offset="0.36" style={{ stopColor: "var(--stage-alpha-mid)" }} />
+          <stop offset="1" style={{ stopColor: "var(--stage-alpha-bottom)" }} />
+        </linearGradient>
+        <radialGradient
+          id="stage-alpha-glow-left"
+          cx="0"
+          cy="0"
+          r="1"
+          gradientTransform="translate(116 10) rotate(22) scale(172 46)"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#FFF8D9" stopOpacity="0.24" />
+          <stop offset="0.5" stopColor="#A48BFF" stopOpacity="0.1" />
+          <stop offset="1" stopColor="#1A1C26" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient
+          id="stage-alpha-glow-right"
+          cx="0"
+          cy="0"
+          r="1"
+          gradientTransform="translate(620 8) rotate(168) scale(220 64)"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#7CB8FF" stopOpacity="0.24" />
+          <stop offset="0.55" stopColor="#4A64FF" stopOpacity="0.12" />
+          <stop offset="1" stopColor="#161821" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient
+          id="stage-alpha-band"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="96"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#FFFFFF" stopOpacity="0.14" />
+          <stop offset="0.18" stopColor="#C7DCFF" stopOpacity="0.1" />
+          <stop offset="0.5" stopColor="#8CA8FF" stopOpacity="0.04" />
+          <stop offset="1" stopColor="#0E0F16" stopOpacity="0" />
+        </linearGradient>
+        <pattern id="stage-alpha-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+          <path d="M12 0H0V12" stroke="#EEF4FF" strokeOpacity="0.045" strokeWidth="0.5" />
+        </pattern>
+        <pattern id="stage-alpha-major" width="48" height="48" patternUnits="userSpaceOnUse">
+          <path d="M48 0H0V48" stroke="#EEF4FF" strokeOpacity="0.08" strokeWidth="0.6" />
+        </pattern>
+      </defs>
+
+      <rect width="100%" height="96" fill="url(#stage-alpha-base)" />
+      <rect width="100%" height="96" fill="url(#stage-alpha-glow-left)" />
+      <rect width="100%" height="96" fill="url(#stage-alpha-glow-right)" />
+      <rect width="100%" height="96" fill="url(#stage-alpha-band)" />
+      <rect width="100%" height="96" fill="url(#stage-alpha-grid)" />
+      <rect width="100%" height="96" fill="url(#stage-alpha-major)" />
+
+      <path
+        d="M0 14H100"
+        stroke="#F6F8FF"
+        strokeOpacity="0.16"
+        strokeLinecap="round"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M132 14H180"
+        stroke="#F6F8FF"
+        strokeOpacity="0.12"
+        strokeLinecap="round"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M548 14H676"
+        stroke="#EFF5FF"
+        strokeOpacity="0.11"
+        strokeLinecap="round"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M702 14H740"
+        stroke="#EFF5FF"
+        strokeOpacity="0.08"
+        strokeLinecap="round"
+        strokeWidth="0.75"
+      />
+
+      <circle cx="592" cy="26" r="18" stroke="#E8F0FF" strokeOpacity="0.16" strokeWidth="0.7" />
+      <circle cx="592" cy="26" r="8" stroke="#E8F0FF" strokeOpacity="0.12" strokeWidth="0.6" />
+      <path
+        d="M592 4V48M570 26H614"
+        stroke="#E8F0FF"
+        strokeOpacity="0.12"
+        strokeLinecap="round"
+        strokeWidth="0.55"
+      />
+
+      <path
+        d="M736 12V28M732 12H740M732 28H740"
+        stroke="#F4F8FF"
+        strokeOpacity="0.2"
+        strokeWidth="0.7"
+      />
+      <path d="M758 12V22M754 12H762" stroke="#F4F8FF" strokeOpacity="0.16" strokeWidth="0.7" />
+
+      <path
+        d="M248 42C286 26 330 26 370 38C410 50 456 50 500 34"
+        stroke="#D7E3FF"
+        strokeOpacity="0.1"
+        strokeWidth="0.75"
+      />
+    </svg>
   );
 }
 
@@ -96,6 +234,18 @@ function NightlySkyArt() {
           <stop stopColor="#07152F" />
           <stop offset="0.5" stopColor="#151443" />
           <stop offset="1" stopColor="#32155B" />
+        </linearGradient>
+        <linearGradient
+          id="stage-night-veil"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="96"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#D7E2FF" stopOpacity="0.18" />
+          <stop offset="0.4" stopColor="#91A3FF" stopOpacity="0.08" />
+          <stop offset="1" stopColor="#0B102D" stopOpacity="0" />
         </linearGradient>
         <radialGradient
           id="stage-night-glow"
@@ -158,8 +308,24 @@ function NightlySkyArt() {
       </defs>
 
       <rect width="100%" height="96" fill="url(#stage-night-sky)" />
+      <rect width="100%" height="96" fill="url(#stage-night-veil)" />
       <rect width="100%" height="96" fill="url(#stage-night-glows)" />
       <rect width="100%" height="96" fill="url(#stage-night-stars)" />
+
+      <path
+        d="M-10 26C44 8 104 10 156 24C205 37 266 37 298 20"
+        stroke="#B9C7FF"
+        strokeOpacity="0.22"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M-10 38C48 20 108 20 162 34C214 47 265 48 298 33"
+        stroke="#98A7FF"
+        strokeOpacity="0.14"
+        strokeWidth="0.65"
+      />
+      <circle cx="246" cy="18" r="9.5" stroke="#E5EAFF" strokeOpacity="0.35" strokeWidth="0.8" />
+      <circle cx="246" cy="18" r="4.2" fill="#E5EAFF" fillOpacity="0.28" />
 
       <g filter="url(#stage-night-soft)">
         <path
@@ -174,6 +340,21 @@ function NightlySkyArt() {
           fillOpacity="0.8"
         />
       </g>
+
+      <path
+        d="M214 50C226 46 234 40 240 31C248 20 259 16 271 16"
+        stroke="#E7EEFF"
+        strokeOpacity="0.24"
+        strokeLinecap="round"
+        strokeWidth="0.7"
+      />
+      <path
+        d="M214 50C225 54 233 61 238 70C243 78 251 84 264 86"
+        stroke="#D2E2FF"
+        strokeOpacity="0.18"
+        strokeLinecap="round"
+        strokeWidth="0.7"
+      />
     </svg>
   );
 }
@@ -200,6 +381,18 @@ function DevBlueprintArt() {
           <stop style={{ stopColor: "var(--stage-bp-top)" }} />
           <stop offset="0.5" style={{ stopColor: "var(--stage-bp-mid)" }} />
           <stop offset="1" style={{ stopColor: "var(--stage-bp-bottom)" }} />
+        </linearGradient>
+        <linearGradient
+          id="stage-bp-header-band"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="96"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#FFFFFF" stopOpacity="0.4" />
+          <stop offset="0.3" stopColor="#AEE7FF" stopOpacity="0.18" />
+          <stop offset="1" stopColor="#1E45F0" stopOpacity="0" />
         </linearGradient>
         <radialGradient
           id="stage-bp-glow"
@@ -306,11 +499,61 @@ function DevBlueprintArt() {
       </defs>
 
       <rect width="100%" height="96" fill="url(#stage-bp-paper)" />
+      <rect width="100%" height="96" fill="url(#stage-bp-header-band)" />
       <rect width="100%" height="96" fill="url(#stage-bp-glows)" />
       <rect width="100%" height="96" fill="url(#stage-bp-grid-minor)" />
       <rect width="100%" height="96" fill="url(#stage-bp-grid-major)" />
       <rect width="100%" height="6" fill="url(#stage-bp-ruler)" />
       <rect width="100%" height="96" fill="url(#stage-bp-annotations)" />
+
+      <g opacity="0.68">
+        <path
+          d="M24 16H102"
+          stroke="#F3FCFF"
+          strokeOpacity="0.55"
+          strokeLinecap="round"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M24 16V32"
+          stroke="#F3FCFF"
+          strokeOpacity="0.55"
+          strokeLinecap="round"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M24 32H48"
+          stroke="#F3FCFF"
+          strokeOpacity="0.55"
+          strokeLinecap="round"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M126 16H196"
+          stroke="#E2F7FF"
+          strokeOpacity="0.38"
+          strokeLinecap="round"
+          strokeWidth="0.7"
+        />
+        <circle cx="226" cy="18" r="7.5" stroke="#EAFBFF" strokeOpacity="0.4" strokeWidth="0.7" />
+        <path d="M226 12V24M220 18H232" stroke="#EAFBFF" strokeOpacity="0.32" strokeWidth="0.55" />
+      </g>
+
+      <g opacity="0.45">
+        <path
+          d="M532 12H616M532 12V28M616 12V28M532 28H616"
+          stroke="#F1FDFF"
+          strokeOpacity="0.32"
+          strokeWidth="0.75"
+        />
+        <path
+          d="M648 15H720"
+          stroke="#F1FDFF"
+          strokeOpacity="0.22"
+          strokeLinecap="round"
+          strokeWidth="0.65"
+        />
+      </g>
     </svg>
   );
 }

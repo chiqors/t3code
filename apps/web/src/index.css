@@ -262,10 +262,22 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --stage-bp-bottom: #1538d0;
   }
 
+  .stage-alpha {
+    --stage-alpha-top: #1f2028;
+    --stage-alpha-mid: #181a21;
+    --stage-alpha-bottom: #121319;
+  }
+
   .dark .stage-blueprint {
     --stage-bp-top: #3a7ad1;
     --stage-bp-mid: #2050ae;
     --stage-bp-bottom: #101f6e;
+  }
+
+  .dark .stage-alpha {
+    --stage-alpha-top: #1f2028;
+    --stage-alpha-mid: #181a21;
+    --stage-alpha-bottom: #121319;
   }
 
   .workspace-topbar {

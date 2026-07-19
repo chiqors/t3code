@@ -40,6 +40,7 @@ import {
   resolveDiffThemeName,
   resolveFileDiffPath,
 } from "../lib/diffRendering";
+import { summarizeTurnDiffStats } from "../lib/turnDiffTree";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useProject, useThread } from "../state/entities";
 import { resolveThreadRouteRef } from "../threadRoutes";
@@ -76,6 +77,7 @@ import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
 import { ChangedFilesTreeView } from "./chat/ChangedFilesTree";
+import { DiffStatLabel } from "./chat/DiffStatLabel";
 import { type TurnDiffFileChange } from "../types";
 
 type DiffRenderMode = "stacked" | "split";
@@ -521,13 +523,32 @@ export default function DiffPanel({
   );
   const reviewTreeFiles = useMemo<ReadonlyArray<TurnDiffFileChange>>(
     () =>
-      codeViewFiles.map(({ fileDiff, filePath }) => ({
-        path: filePath,
-        kind: fileDiff.type,
-        additions: fileDiff.hunks.reduce((total, hunk) => total + hunk.additionLines, 0),
-        deletions: fileDiff.hunks.reduce((total, hunk) => total + hunk.deletionLines, 0),
-      })),
-    [codeViewFiles],
+      codeViewFiles.map(({ fileDiff, filePath }) => {
+        const authoritativeFile = selectedTurn?.files.find((file) => file.path === filePath);
+        const workingTreeFile =
+          selectedTurnId === null && selectedGitScope === "unstaged"
+            ? gitStatusQuery.data?.workingTree.files.find((file) => file.path === filePath)
+            : undefined;
+        return {
+          path: filePath,
+          kind: fileDiff.type,
+          additions:
+            authoritativeFile?.additions ??
+            workingTreeFile?.insertions ??
+            fileDiff.hunks.reduce((total, hunk) => total + hunk.additionLines, 0),
+          deletions:
+            authoritativeFile?.deletions ??
+            workingTreeFile?.deletions ??
+            fileDiff.hunks.reduce((total, hunk) => total + hunk.deletionLines, 0),
+        };
+      }),
+    [
+      codeViewFiles,
+      gitStatusQuery.data?.workingTree.files,
+      selectedGitScope,
+      selectedTurn,
+      selectedTurnId,
+    ],
   );
   const filteredReviewTreeFiles = useMemo(() => {
     const query = fileFilter.trim().toLowerCase();
@@ -647,6 +668,20 @@ export default function DiffPanel({
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectBranchBaseRef(routeThreadRef, baseRef);
   };
+  const renderedReviewTreeStats = summarizeTurnDiffStats(reviewTreeFiles);
+  const selectedScopeFileCount = selectedTurn
+    ? selectedTurn.files.length
+    : selectedTurnId === null && selectedGitScope === "unstaged" && gitStatusQuery.data
+      ? gitStatusQuery.data.workingTree.files.length
+      : reviewTreeFiles.length;
+  const selectedScopeStats = selectedTurn
+    ? summarizeTurnDiffStats(selectedTurn.files)
+    : selectedTurnId === null && selectedGitScope === "unstaged" && gitStatusQuery.data
+      ? {
+          additions: gitStatusQuery.data.workingTree.insertions,
+          deletions: gitStatusQuery.data.workingTree.deletions,
+        }
+      : renderedReviewTreeStats;
 
   const headerRow = (
     <>
@@ -707,6 +742,18 @@ export default function DiffPanel({
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
+        {selectedScopeFileCount > 0 ? (
+          <div className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
+            <span>
+              {selectedScopeFileCount} {selectedScopeFileCount === 1 ? "file" : "files"}
+            </span>
+            <DiffStatLabel
+              additions={selectedScopeStats.additions}
+              deletions={selectedScopeStats.deletions}
+              layout="inline"
+            />
+          </div>
+        ) : null}
         {selectedTurnId === null && selectedGitScope === "branch" && selectedGitSource?.baseRef && (
           <div
             className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"
@@ -1017,7 +1064,7 @@ export default function DiffPanel({
                 <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/70 px-3 text-xs">
                   <span className="font-medium text-foreground">Changed files</span>
                   <span className="tabular-nums text-muted-foreground">
-                    {reviewTreeFiles.length}
+                    {selectedScopeFileCount}
                   </span>
                 </div>
                 <div className="relative mx-2 my-2 shrink-0">

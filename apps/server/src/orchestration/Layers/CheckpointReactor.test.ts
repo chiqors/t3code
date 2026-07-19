@@ -1121,27 +1121,46 @@ describe("CheckpointReactor", () => {
     });
   });
 
-  it("appends an error activity when revert is requested without an active session", async () => {
-    const harness = await createHarness({ hasSession: false });
+  it("restores and completes a revert without an active provider session", async () => {
+    const gitStatusRefreshCalls: string[] = [];
+    const harness = await createHarness({ hasSession: false, gitStatusRefreshCalls });
     const createdAt = "2026-01-01T00:00:00.000Z";
 
+    // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: CommandId.make("cmd-revert-no-session-diff"),
+        threadId: ThreadId.make("thread-1"),
+        turnId: asTurnId("turn-revert-no-session"),
+        completedAt: createdAt,
+        checkpointRef: checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1),
+        status: "ready",
+        files: [{ path: "README.md", kind: "modified", additions: 1, deletions: 1 }],
+        checkpointTurnCount: 1,
+        createdAt,
+      }),
+    );
+
+    // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.checkpoint.revert",
         commandId: CommandId.make("cmd-revert-no-session"),
         threadId: ThreadId.make("thread-1"),
-        turnCount: 1,
+        turnCount: 0,
         createdAt,
       }),
     );
 
-    const thread = await waitForThread(harness.readModel, (entry) =>
-      entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) => entry.checkpoints.length === 0,
     );
 
-    expect(thread.activities.some((activity) => activity.kind === "checkpoint.revert.failed")).toBe(
-      true,
-    );
+    expect(thread.checkpoints).toHaveLength(0);
     expect(harness.provider.rollbackConversation).not.toHaveBeenCalled();
+    expect(gitStatusRefreshCalls).toEqual([harness.cwd]);
+    expect(NodeFS.readFileSync(NodePath.join(harness.cwd, "README.md"), "utf8")).toBe("v1\n");
   });
 });
