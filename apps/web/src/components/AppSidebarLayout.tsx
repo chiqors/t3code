@@ -4,12 +4,20 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
-import { isMacPlatform } from "../lib/utils";
+import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useClientSettings } from "../hooks/useSettings";
 import ThreadSidebar from "./Sidebar";
 import ThreadSidebarV2 from "./SidebarV2";
-import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar } from "./ui/sidebar";
+import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
+import {
+  Sidebar,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+  useSidebarVisibility,
+} from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { zoomCompensatedInsetPx } from "~/workspaceTitlebar";
 
@@ -21,6 +29,8 @@ const MACOS_TRAFFIC_LIGHTS_LEFT_INSET_PX = 90;
 function SidebarControl() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { isMobile, state, toggleSidebar } = useSidebar();
+  const isSidebarVisible = useSidebarVisibility();
+  const stageBackdropVariant = useSidebarStageBackdropVariant();
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
 
   useEffect(() => {
@@ -49,7 +59,15 @@ function SidebarControl() {
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarTrigger className="pointer-events-auto" aria-label="Toggle main sidebar" />
+            <SidebarTrigger
+              className={cn(
+                "pointer-events-auto",
+                isSidebarVisible &&
+                  stageBackdropVariant &&
+                  "hover:bg-white/15 [&_svg]:text-white/85! [&_svg]:hover:text-white!",
+              )}
+              aria-label="Toggle main sidebar"
+            />
           }
         />
         <TooltipPopup side="bottom">
