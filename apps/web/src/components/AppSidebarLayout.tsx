@@ -64,8 +64,6 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const sidebarV2Enabled = useClientSettings((settings) => settings.sidebarV2Enabled);
   const pathname = useLocation({ select: (location) => location.pathname });
-  const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
   // Settings routes render the settings nav, which lives in the v1 component
   // and is identical for both sidebars, so v1 stays mounted there.
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
@@ -165,7 +163,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
     const unsubscribe = onMenuAction((action) => {
       if (action === "open-settings") {
-        const isSettingsRoute = /^\/settings(\/|$)/.test(pathnameRef.current);
+        const isSettingsRoute = /^\/settings(\/|$)/.test(pathname);
         if (!isSettingsRoute) {
           void navigate({ to: "/settings" });
         }
@@ -175,7 +173,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     return () => {
       unsubscribe?.();
     };
-  }, [navigate]);
+  }, [navigate, pathname]);
 
   return (
     <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={macosWindowControlsStyle}>
