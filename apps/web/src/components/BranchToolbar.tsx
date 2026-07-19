@@ -21,7 +21,6 @@ import {
   resolveEffectiveEnvMode,
   resolveLockedWorkspaceLabel,
 } from "./BranchToolbar.logic";
-import { BranchToolbarBranchSelector } from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
 import { ProjectFavicon } from "./ProjectFavicon";
@@ -44,13 +43,7 @@ interface BranchToolbarProps {
   draftId?: DraftId;
   onEnvModeChange: (mode: EnvMode) => void;
   effectiveEnvModeOverride?: EnvMode;
-  activeThreadBranchOverride?: string | null;
-  onActiveThreadBranchOverrideChange?: (branch: string | null) => void;
-  startFromOrigin: boolean;
-  onStartFromOriginChange: (startFromOrigin: boolean) => void;
   envLocked: boolean;
-  onCheckoutPullRequestRequest?: (reference: string) => void;
-  onComposerFocusRequest?: () => void;
   availableEnvironments?: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
 }
@@ -197,13 +190,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   draftId,
   onEnvModeChange,
   effectiveEnvModeOverride,
-  activeThreadBranchOverride,
-  onActiveThreadBranchOverrideChange,
-  startFromOrigin,
-  onStartFromOriginChange,
   envLocked,
-  onCheckoutPullRequestRequest,
-  onComposerFocusRequest,
   availableEnvironments,
   onEnvironmentChange,
 }: BranchToolbarProps) {
@@ -289,21 +276,6 @@ export const BranchToolbar = memo(function BranchToolbar({
           />
         </div>
       )}
-
-      <BranchToolbarBranchSelector
-        className="min-w-0 flex-1 justify-end md:ml-auto md:flex-none"
-        environmentId={environmentId}
-        threadId={threadId}
-        {...(draftId ? { draftId } : {})}
-        envLocked={envLocked}
-        {...(effectiveEnvModeOverride ? { effectiveEnvModeOverride } : {})}
-        {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
-        {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
-        startFromOrigin={startFromOrigin}
-        onStartFromOriginChange={onStartFromOriginChange}
-        {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
-        {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
-      />
     </div>
   );
 });
