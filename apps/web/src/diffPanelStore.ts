@@ -10,37 +10,7 @@ export type DiffPanelSelection =
   | { kind: "unstaged" }
   | { kind: "turn"; turnId: TurnId; filePath: string | null; revealRequestId: number };
 
-const DEFAULT_SELECTION: DiffPanelSelection = { kind: "unstaged" };
-
-interface PersistedDiffPanelState {
-  byThreadKey: Record<string, DiffPanelSelection>;
-  branchBaseRefByThreadKey: Record<string, string | null>;
-}
-
-function migrateDiffPanelState(
-  persistedState: unknown,
-  version: number,
-): PersistedDiffPanelState | unknown {
-  if (version >= 2 || typeof persistedState !== "object" || persistedState === null) {
-    return persistedState;
-  }
-
-  const state = persistedState as Partial<PersistedDiffPanelState>;
-  const byThreadKey = Object.fromEntries(
-    Object.entries(state.byThreadKey ?? {}).map(([threadKey, selection]) => [
-      threadKey,
-      selection?.kind === "branch" && selection.baseRef === null
-        ? { kind: "unstaged" as const }
-        : selection,
-    ]),
-  );
-
-  return {
-    ...state,
-    byThreadKey,
-    branchBaseRefByThreadKey: state.branchBaseRefByThreadKey ?? {},
-  };
-}
+const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
 
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
@@ -148,8 +118,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
     }),
     {
       name: "t3code:diff-panel-state:v1",
-      version: 2,
-      migrate: migrateDiffPanelState,
+      version: 1,
       storage: createJSONStorage(() =>
         resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
       ),

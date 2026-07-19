@@ -42,28 +42,6 @@ describe("rightPanelStore", () => {
     });
   });
 
-  it("closes persisted empty panel states", () => {
-    expect(
-      migratePersistedRightPanelState({
-        byThreadKey: {
-          "env-1:thread-A": {
-            isOpen: true,
-            activeSurfaceId: null,
-            surfaces: [],
-          },
-        },
-      }),
-    ).toEqual({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: false,
-          activeSurfaceId: null,
-          surfaces: [],
-        },
-      },
-    });
-  });
-
   it("upgrades saved single-session terminal surfaces to split-capable surfaces", () => {
     expect(
       migratePersistedRightPanelState({
@@ -128,20 +106,6 @@ describe("rightPanelStore", () => {
     useRightPanelStore.getState().open(refA, "preview");
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("preview");
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refB)).toBeNull();
-  });
-
-  it("opens dedicated sources and process detail surfaces", () => {
-    useRightPanelStore.getState().open(refA, "sources");
-    useRightPanelStore.getState().open(refA, "processes");
-    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
-      "processes",
-    );
-    expect(
-      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
-    ).toEqual([
-      { id: "sources", kind: "sources" },
-      { id: "processes", kind: "processes" },
-    ]);
   });
 
   it("opening a different kind keeps both surfaces and activates the new one", () => {
@@ -259,7 +223,7 @@ describe("rightPanelStore", () => {
     });
   });
 
-  it("opens the empty panel chooser when no surface has been selected", () => {
+  it("toggles empty panel visibility without creating a surface", () => {
     useRightPanelStore.getState().toggleVisibility(refA);
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: true,

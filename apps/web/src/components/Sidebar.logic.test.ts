@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   createThreadJumpHintVisibilityController,
-  filterProjectsForNewThreadPicker,
   getSidebarThreadIdsToPrewarm,
   getVisibleSidebarThreadIds,
   resolveAdjacentThreadId,
@@ -616,26 +615,6 @@ describe("resolveSidebarV2Status", () => {
 
   it("defaults to ready with no session", () => {
     expect(resolveSidebarV2Status({ hasPendingApprovals: false, session: null })).toBe("ready");
-  });
-});
-
-describe("filterProjectsForNewThreadPicker", () => {
-  const projects = [
-    { title: "Infisical", workspaceRoot: "/Users/example/Labs/infisical" },
-    { title: "Photon Studio", workspaceRoot: "/Users/example/Labs/photon-studio" },
-    { title: "T3 Code", workspaceRoot: "/Users/example/Labs/t3code" },
-  ];
-
-  it("matches project titles without changing contextual order", () => {
-    expect(filterProjectsForNewThreadPicker(projects, "t")).toEqual([projects[1], projects[2]]);
-  });
-
-  it("matches workspace paths case-insensitively", () => {
-    expect(filterProjectsForNewThreadPicker(projects, "LABS/INFISICAL")).toEqual([projects[0]]);
-  });
-
-  it("returns all projects for a blank query", () => {
-    expect(filterProjectsForNewThreadPicker(projects, "   ")).toEqual(projects);
   });
 });
 

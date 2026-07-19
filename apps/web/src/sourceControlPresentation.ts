@@ -23,16 +23,6 @@ export interface SourceControlPresentation {
   readonly Icon: ElementType<{ className?: string }>;
 }
 
-export function getSourceControlIssueSearchUrl(
-  provider: SourceControlProviderInfo | null | undefined,
-): string | null {
-  if (!provider) return null;
-  const baseUrl = provider.baseUrl.replace(/\/+$/, "");
-  if (provider.kind === "github") return `${baseUrl}/issues`;
-  if (provider.kind === "gitlab") return `${baseUrl}/dashboard/issues`;
-  return null;
-}
-
 export function getSourceControlPresentation(
   provider: SourceControlProviderInfo | null | undefined,
 ): SourceControlPresentation {

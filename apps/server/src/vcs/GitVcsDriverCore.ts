@@ -46,7 +46,6 @@ const RANGE_DIFF_SUMMARY_MAX_OUTPUT_BYTES = 19_000;
 const RANGE_DIFF_PATCH_MAX_OUTPUT_BYTES = 59_000;
 const REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES = 120_000;
 const REVIEW_UNTRACKED_DIFF_MAX_OUTPUT_BYTES = 80_000;
-const REVIEW_DIFF_CONTEXT_LINES = 6;
 const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 120_000;
 const STATUS_UPSTREAM_REFRESH_INTERVAL = Duration.seconds(15);
 const STATUS_UPSTREAM_REFRESH_TIMEOUT = Duration.seconds(5);
@@ -1844,16 +1843,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         executeGit(
           "GitVcsDriver.readUntrackedReviewDiffs.diff",
           cwd,
-          [
-            "diff",
-            "--no-index",
-            "--patch",
-            "--minimal",
-            `--unified=${REVIEW_DIFF_CONTEXT_LINES}`,
-            "--",
-            "/dev/null",
-            relativePath,
-          ],
+          ["diff", "--no-index", "--patch", "--minimal", "--", "/dev/null", relativePath],
           {
             allowNonZeroExit: true,
             maxOutputBytes: REVIEW_UNTRACKED_DIFF_MAX_OUTPUT_BYTES,
@@ -1899,7 +1889,6 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         "diff",
         "--patch",
         "--minimal",
-        `--unified=${REVIEW_DIFF_CONTEXT_LINES}`,
         ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
         "HEAD",
         "--",
@@ -1933,7 +1922,6 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
               "diff",
               "--patch",
               "--minimal",
-              `--unified=${REVIEW_DIFF_CONTEXT_LINES}`,
               ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
               `${baseRef}...HEAD`,
             ],

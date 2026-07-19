@@ -1,16 +1,6 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import {
-  Activity,
-  ClipboardList,
-  FileDiff,
-  Files,
-  Globe2,
-  Link2,
-  Plus,
-  TerminalSquare,
-  X,
-} from "lucide-react";
+import { ClipboardList, FileDiff, Files, Globe2, Plus, TerminalSquare, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -54,8 +44,6 @@ interface RightPanelTabsProps {
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
-  onAddSources: () => void;
-  onAddProcesses: () => void;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -103,8 +91,6 @@ function RightPanelEmptyState(props: {
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
-  onAddSources: () => void;
-  onAddProcesses: () => void;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -141,22 +127,6 @@ function RightPanelEmptyState(props: {
       available: props.diffAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.diff,
       onClick: props.onAddDiff,
-    },
-    {
-      label: "Sources",
-      description: "Review files and links from this conversation.",
-      icon: Link2,
-      available: true,
-      disabledReason: null,
-      onClick: props.onAddSources,
-    },
-    {
-      label: "Processes",
-      description: "Inspect background processes and terminals.",
-      icon: Activity,
-      available: true,
-      disabledReason: null,
-      onClick: props.onAddProcesses,
     },
   ] as const;
 
@@ -235,10 +205,6 @@ function surfaceTitle(
       );
     case "plan":
       return "Plan";
-    case "sources":
-      return "Sources";
-    case "processes":
-      return "Background processes";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -300,10 +266,6 @@ function SurfaceIcon({
       return <TerminalSquare className="size-3.5 shrink-0" />;
     case "plan":
       return <ClipboardList className="size-3.5 shrink-0" />;
-    case "sources":
-      return <Link2 className="size-3.5 shrink-0" />;
-    case "processes":
-      return <Activity className="size-3.5 shrink-0" />;
   }
 }
 
@@ -508,14 +470,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <FileDiff />
                     Diff
                   </SurfaceMenuItem>
-                  <SurfaceMenuItem available onClick={props.onAddSources}>
-                    <Link2 />
-                    Sources
-                  </SurfaceMenuItem>
-                  <SurfaceMenuItem available onClick={props.onAddProcesses}>
-                    <Activity />
-                    Processes
-                  </SurfaceMenuItem>
                 </MenuPopup>
               </Menu>
             ) : null}
@@ -530,8 +484,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}
             onAddFiles={props.onAddFiles}
-            onAddSources={props.onAddSources}
-            onAddProcesses={props.onAddProcesses}
             browserAvailable={props.browserAvailable}
             diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}

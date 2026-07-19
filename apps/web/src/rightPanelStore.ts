@@ -14,16 +14,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
-export const RIGHT_PANEL_KINDS = [
-  "plan",
-  "diff",
-  "files",
-  "file",
-  "preview",
-  "terminal",
-  "sources",
-  "processes",
-] as const;
+export const RIGHT_PANEL_KINDS = ["plan", "diff", "files", "file", "preview", "terminal"] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
 export type RightPanelSurface =
@@ -46,12 +37,10 @@ export type RightPanelSurface =
       revealLine: number | null;
       revealRequestId: number;
     }
-  | { id: "plan"; kind: "plan" }
-  | { id: "sources"; kind: "sources" }
-  | { id: "processes"; kind: "processes" };
+  | { id: "plan"; kind: "plan" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
-const RIGHT_PANEL_STORAGE_VERSION = 8;
+const RIGHT_PANEL_STORAGE_VERSION = 7;
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -103,10 +92,6 @@ const singletonSurface = (
       return { id: "files", kind };
     case "plan":
       return { id: "plan", kind };
-    case "sources":
-      return { id: "sources", kind };
-    case "processes":
-      return { id: "processes", kind };
   }
 };
 
@@ -239,10 +224,9 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                 ? (validThreadState?.activeSurfaceId ?? null)
                 : null;
               const isOpen =
-                surfaces.length > 0 &&
-                (typeof validThreadState?.isOpen === "boolean"
+                typeof validThreadState?.isOpen === "boolean"
                   ? validThreadState.isOpen
-                  : activeSurfaceId !== null);
+                  : activeSurfaceId !== null;
               return [threadKey, { isOpen, surfaces, activeSurfaceId }];
             },
           ),
@@ -497,9 +481,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       show: (ref) =>
         set((state) => ({
           byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) =>
-            current.surfaces.length === 0 || current.isOpen
-              ? current
-              : { ...current, isOpen: true },
+            current.isOpen ? current : { ...current, isOpen: true },
           ),
         })),
       close: (ref) =>

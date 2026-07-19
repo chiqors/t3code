@@ -29,7 +29,6 @@ import {
   InfoIcon,
   LockIcon,
   GlobeIcon,
-  SearchIcon,
 } from "lucide-react";
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon } from "~/components/Icons";
@@ -64,7 +63,7 @@ import {
 } from "~/components/ui/dialog";
 import { Group, GroupSeparator } from "~/components/ui/group";
 import { Input } from "~/components/ui/input";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "~/components/ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Textarea } from "~/components/ui/textarea";
@@ -89,17 +88,13 @@ import { randomUUID } from "~/lib/utils";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { readLocalApi } from "~/localApi";
-import {
-  getSourceControlIssueSearchUrl,
-  getSourceControlPresentation,
-} from "~/sourceControlPresentation";
+import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { openPullRequestLink } from "~/lib/openPullRequestLink";
 
 interface GitActionsControlProps {
   gitCwd: string | null;
   activeThreadRef: ScopedThreadRef | null;
   draftId?: DraftId;
-  variant?: "combined" | "git" | "provider";
 }
 
 interface PendingDefaultBranchAction {
@@ -976,7 +971,6 @@ export default function GitActionsControl({
   gitCwd,
   activeThreadRef,
   draftId,
-  variant = "combined",
 }: GitActionsControlProps) {
   const updateThreadMetadata = useAtomCommand(
     threadEnvironment.updateMetadata,
@@ -1655,67 +1649,6 @@ export default function GitActionsControl({
   );
 
   const canPublishRepository = isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
-  const gitOnlyMenuItems = gitActionMenuItems.filter((item) => item.id !== "pr");
-  const providerMenuItems = gitActionMenuItems.filter((item) => item.id === "pr");
-  const issueSearchUrl = getSourceControlIssueSearchUrl(gitStatusForActions?.sourceControlProvider);
-
-  const openIssueSearch = () => {
-    if (!issueSearchUrl) return;
-    const api = readLocalApi();
-    if (!api) {
-      toastManager.add({ type: "error", title: "Issue search is unavailable." });
-      return;
-    }
-    void api.shell.openExternal(issueSearchUrl).catch((error) => {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Unable to open issue search",
-          description: error instanceof Error ? error.message : "An error occurred.",
-          ...(threadToastData !== undefined ? { data: threadToastData } : {}),
-        }),
-      );
-    });
-  };
-
-  const renderActionMenuItem = (item: GitActionMenuItem) => {
-    const disabledReason = getMenuActionDisabledReason({
-      item,
-      gitStatus: gitStatusForActions,
-      isBusy: isGitActionRunning,
-      hasPrimaryRemote,
-    });
-    if (item.disabled && disabledReason) {
-      return (
-        <Popover key={`${item.id}-${item.label}`}>
-          <PopoverTrigger
-            openOnHover
-            nativeButton={false}
-            render={<span className="block w-max cursor-not-allowed" />}
-          >
-            <MenuItem className="w-full" disabled>
-              <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
-              {item.label}
-            </MenuItem>
-          </PopoverTrigger>
-          <PopoverPopup tooltipStyle side="left" align="center">
-            {disabledReason}
-          </PopoverPopup>
-        </Popover>
-      );
-    }
-
-    return (
-      <MenuItem
-        key={`${item.id}-${item.label}`}
-        disabled={item.disabled}
-        onClick={() => openDialogForMenuItem(item)}
-      >
-        <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
-        {item.label}
-      </MenuItem>
-    );
-  };
 
   if (!gitCwd) return null;
 
@@ -1749,61 +1682,6 @@ export default function GitActionsControl({
             {initAction.isPending ? "Initializing..." : "Initialize Git"}
           </span>
         </Button>
-      ) : variant === "provider" ? (
-        <Menu
-          onOpenChange={(open) => {
-            if (open) requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
-          }}
-        >
-          <MenuTrigger
-            className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70"
-            disabled={isGitActionRunning}
-            aria-label={`${sourceControlPresentation.providerName} actions`}
-          >
-            <SourceControlIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">
-              {sourceControlPresentation.providerName}
-            </span>
-            <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
-          </MenuTrigger>
-          <MenuPopup side="left" align="start" sideOffset={6} className="min-w-52">
-            {providerMenuItems.map(renderActionMenuItem)}
-            {providerMenuItems.length > 0 && issueSearchUrl ? <MenuSeparator /> : null}
-            {issueSearchUrl ? (
-              <MenuItem onClick={openIssueSearch}>
-                <SearchIcon />
-                Search issues
-              </MenuItem>
-            ) : null}
-            {providerMenuItems.length === 0 && !issueSearchUrl ? (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                Provider actions are unavailable.
-              </p>
-            ) : null}
-          </MenuPopup>
-        </Menu>
-      ) : variant === "git" ? (
-        <Menu
-          onOpenChange={(open) => {
-            if (open) requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
-          }}
-        >
-          <MenuTrigger
-            className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70"
-            disabled={isGitActionRunning}
-            aria-label="Commit and push actions"
-          >
-            <GitCommitIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">Commit &amp; push</span>
-            <ChevronDownIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 text-muted-foreground/60"
-            />
-          </MenuTrigger>
-          <MenuPopup side="left" align="start" sideOffset={6} className="min-w-44">
-            {gitOnlyMenuItems.map(renderActionMenuItem)}
-          </MenuPopup>
-        </Menu>
       ) : (
         <Group aria-label="Git actions" className="shrink-0">
           {quickActionDisabledReason ? (
@@ -1859,7 +1737,49 @@ export default function GitActionsControl({
               <ChevronDownIcon aria-hidden="true" className="size-4" />
             </MenuTrigger>
             <MenuPopup align="end" className="w-full">
-              {gitActionMenuItems.map(renderActionMenuItem)}
+              {gitActionMenuItems.map((item) => {
+                const disabledReason = getMenuActionDisabledReason({
+                  item,
+                  gitStatus: gitStatusForActions,
+                  isBusy: isGitActionRunning,
+                  hasPrimaryRemote,
+                });
+                if (item.disabled && disabledReason) {
+                  return (
+                    <Popover key={`${item.id}-${item.label}`}>
+                      <PopoverTrigger
+                        openOnHover
+                        nativeButton={false}
+                        render={<span className="block w-max cursor-not-allowed" />}
+                      >
+                        <MenuItem className="w-full" disabled>
+                          <GitActionItemIcon
+                            icon={item.icon}
+                            SourceControlIcon={SourceControlIcon}
+                          />
+                          {item.label}
+                        </MenuItem>
+                      </PopoverTrigger>
+                      <PopoverPopup tooltipStyle side="left" align="center">
+                        {disabledReason}
+                      </PopoverPopup>
+                    </Popover>
+                  );
+                }
+
+                return (
+                  <MenuItem
+                    key={`${item.id}-${item.label}`}
+                    disabled={item.disabled}
+                    onClick={() => {
+                      openDialogForMenuItem(item);
+                    }}
+                  >
+                    <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
+                    {item.label}
+                  </MenuItem>
+                );
+              })}
               {canPublishRepository ? (
                 <MenuItem
                   disabled={isGitActionRunning}
