@@ -179,6 +179,15 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
+    latestUndoableTurnId: null,
+    latestEditableUserMessageId: null,
+    editingUserMessageId: null,
+    editingUserMessageText: "",
+    onStartEditUserMessage: () => {},
+    onChangeEditUserMessage: () => {},
+    onCancelEditUserMessage: () => {},
+    onSubmitEditUserMessage: () => {},
+    onUndoTurnChanges: () => {},
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -323,6 +332,73 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('data-user-message-collapsed="true"');
     expect(markup).toContain('data-user-message-fade="true"');
     expect(markup).toContain('data-user-message-footer="true"');
+  });
+
+  it("renders the latest turn changes with undo, review, stats, and file details", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const assistantMessageId = MessageId.make("assistant-with-changes");
+    const turnId = "turn-with-changes" as never;
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        canContinueInNewWorktree
+        latestUndoableTurnId={turnId}
+        turnDiffSummaryByAssistantMessageId={
+          new Map([
+            [
+              assistantMessageId,
+              {
+                turnId,
+                checkpointTurnCount: 1,
+                checkpointRef: "refs/t3/checkpoints/test/turn/1" as never,
+                status: "ready",
+                files: [
+                  {
+                    path: "apps/web/src/ChatView.tsx",
+                    kind: "modified",
+                    additions: 12,
+                    deletions: 3,
+                  },
+                  {
+                    path: "apps/server/src/server.ts",
+                    kind: "modified",
+                    additions: 4,
+                    deletions: 0,
+                  },
+                ],
+                assistantMessageId,
+                completedAt: MESSAGE_CREATED_AT,
+              },
+            ],
+          ])
+        }
+        timelineEntries={[
+          {
+            id: "assistant-entry",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: assistantMessageId,
+              role: "assistant",
+              text: "Implemented the requested changes.",
+              turnId,
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: false,
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Edited 2 files");
+    expect(markup).toContain(">Undo<");
+    expect(markup).toContain(">Review<");
+    expect(markup).toContain("ChatView.tsx");
+    expect(markup).toContain("server.ts");
+    expect(markup).toContain("+16");
+    expect(markup).toContain("-3");
+    expect(markup).toContain('aria-label="Continue in a new chat"');
   });
 
   it("does not render collapse controls for short user messages", async () => {

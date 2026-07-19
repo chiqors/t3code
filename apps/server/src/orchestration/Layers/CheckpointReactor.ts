@@ -675,19 +675,28 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const restored = yield* checkpointStore.restoreCheckpoint({
-      cwd: sessionRuntime.value.cwd,
-      checkpointRef: targetCheckpointRef,
-      fallbackToHead: event.payload.turnCount === 0,
-    });
-    if (!restored) {
-      yield* appendRevertFailureActivity({
-        threadId: event.payload.threadId,
-        turnCount: event.payload.turnCount,
-        detail: `Filesystem checkpoint is unavailable for turn ${event.payload.turnCount}.`,
-        createdAt: now,
-      }).pipe(Effect.catch(() => Effect.void));
-      return;
+    const checkpointsToDiscard = thread.checkpoints.filter(
+      (checkpoint) => checkpoint.checkpointTurnCount > event.payload.turnCount,
+    );
+    const requiresFilesystemRestore = checkpointsToDiscard.some(
+      (checkpoint) => checkpoint.status !== "ready" || checkpoint.files.length > 0,
+    );
+
+    if (requiresFilesystemRestore) {
+      const restored = yield* checkpointStore.restoreCheckpoint({
+        cwd: sessionRuntime.value.cwd,
+        checkpointRef: targetCheckpointRef,
+        fallbackToHead: event.payload.turnCount === 0,
+      });
+      if (!restored) {
+        yield* appendRevertFailureActivity({
+          threadId: event.payload.threadId,
+          turnCount: event.payload.turnCount,
+          detail: `Filesystem checkpoint is unavailable for turn ${event.payload.turnCount}.`,
+          createdAt: now,
+        }).pipe(Effect.catch(() => Effect.void));
+        return;
+      }
     }
 
     // Refresh the workspace entry index so the @-mention file picker
@@ -702,12 +711,9 @@ const make = Effect.gen(function* () {
       });
     }
 
-    const staleCheckpointRefs: Array<CheckpointRef> = [];
-    for (const checkpoint of thread.checkpoints) {
-      if (checkpoint.checkpointTurnCount > event.payload.turnCount) {
-        staleCheckpointRefs.push(checkpoint.checkpointRef);
-      }
-    }
+    const staleCheckpointRefs: Array<CheckpointRef> = checkpointsToDiscard.map(
+      (checkpoint) => checkpoint.checkpointRef,
+    );
 
     if (staleCheckpointRefs.length > 0) {
       yield* checkpointStore.deleteCheckpointRefs({

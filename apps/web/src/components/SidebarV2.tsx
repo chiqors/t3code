@@ -8,7 +8,15 @@ import {
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { CheckIcon, CloudIcon, PlusIcon, SearchIcon, Undo2Icon } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  CloudIcon,
+  ListFilterIcon,
+  PlusIcon,
+  SearchIcon,
+  Undo2Icon,
+} from "lucide-react";
 import {
   memo,
   useCallback,
@@ -50,7 +58,7 @@ import {
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
 import { onOpenNewThreadPicker } from "../newThreadPickerBus";
-import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogDescription, DialogHeader, DialogPopup, DialogTitle } from "./ui/dialog";
 import {
   resolveThreadActionProjectRef,
   startNewThreadFromContext,
@@ -70,6 +78,7 @@ import type { SidebarThreadSummary } from "../types";
 import { cn } from "~/lib/utils";
 import {
   isTrailingDoubleClick,
+  filterProjectsForNewThreadPicker,
   resolveAdjacentThreadId,
   resolveSidebarV2Status,
   sortThreadsForSidebarV2,
@@ -83,6 +92,8 @@ import { primaryServerProvidersAtom } from "../state/server";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { CommandDialogTrigger } from "./ui/command";
 import { Kbd } from "./ui/kbd";
+import { Input } from "./ui/input";
+import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
 import {
   SidebarContent,
   SidebarGroup,
@@ -109,6 +120,8 @@ const CARD_EDGE_BY_STATUS: Partial<Record<SidebarV2Status, string>> = {
 // stays behind an explicit Show more.
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
+const ALL_PROJECTS_SCOPE = "__all-projects__";
+const NEW_THREAD_PROJECT_SEARCH_THRESHOLD = 5;
 
 const STATUS_WORD_BY_STATUS: Partial<
   Record<SidebarV2Status, { label: string; className: string }>
@@ -484,15 +497,17 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
               : "border-black/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.03]",
           )}
         >
-          <ProjectFavicon
-            environmentId={thread.environmentId}
-            cwd={props.projectCwd ?? ""}
-            className="size-3"
-          />
           {props.projectTitle ? (
-            <span className="min-w-0 truncate font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {props.projectTitle}
-            </span>
+            <>
+              <ProjectFavicon
+                environmentId={thread.environmentId}
+                cwd={props.projectCwd ?? ""}
+                className="size-3"
+              />
+              <span className="min-w-0 truncate font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {props.projectTitle}
+              </span>
+            </>
           ) : null}
           <span className="relative ml-auto flex h-4 w-16 shrink-0 items-center justify-end">
             <span
@@ -689,9 +704,8 @@ export default function SidebarV2() {
     [],
   );
 
-  // Project scope: chips above the list. Scoping filters the list AND
-  // becomes the new-thread target — one visible control doing both jobs the
-  // old per-project headers did.
+  // Project scope filters existing threads and also supplies the contextual
+  // default in the separate new-thread project picker.
   const [projectScopeKey, setProjectScopeKey] = useState<string | null>(null);
   const scopedProject = useMemo(
     () =>
@@ -1314,9 +1328,11 @@ export default function SidebarV2() {
 
   // New thread defaults to the project you're in (active thread's project,
   // falling back to the top project) — same resolution the command palette
-  // uses. The chevron menu is the explicit project picker the flat list no
-  // longer gets from per-project headers.
+  // uses. With multiple projects, creation stays explicit in a picker so a
+  // filter change can never be mistaken for creating work.
   const [newThreadPickerOpen, setNewThreadPickerOpen] = useState(false);
+  const [newThreadProjectQuery, setNewThreadProjectQuery] = useState("");
+  const newThreadProjectListRef = useRef<HTMLDivElement>(null);
   // chat.new (mod+shift+o / mod+n) is handled by the _chat route layout; in
   // v2 with multiple projects it opens this picker via the event bus.
   useEffect(() => onOpenNewThreadPicker(() => setNewThreadPickerOpen(true)), []);
@@ -1383,6 +1399,16 @@ export default function SidebarV2() {
       ),
     ];
   }, [newThreadTargetProject, projects]);
+  const showNewThreadProjectSearch =
+    newThreadPickerProjects.length > NEW_THREAD_PROJECT_SEARCH_THRESHOLD;
+  const visibleNewThreadPickerProjects = useMemo(
+    () => filterProjectsForNewThreadPicker(newThreadPickerProjects, newThreadProjectQuery),
+    [newThreadPickerProjects, newThreadProjectQuery],
+  );
+  const handleNewThreadPickerOpenChange = useCallback((open: boolean) => {
+    setNewThreadPickerOpen(open);
+    if (!open) setNewThreadProjectQuery("");
+  }, []);
 
   const commandPaletteShortcutLabel = shortcutLabelForCommand(keybindings, "commandPalette.toggle");
   const newThreadShortcutLabel = shortcutLabelForCommand(keybindings, "chat.new");
@@ -1430,73 +1456,50 @@ export default function SidebarV2() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-        {projects.length > 0 ? (
-          <SidebarGroup className="px-2 pb-1 pt-0.5">
-            <div
-              className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              role="tablist"
-              aria-label="Filter threads by project"
-            >
-              {projects.length > 1 ? (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={projectScopeKey === null}
-                  onClick={() => setProjectScopeKey(null)}
-                  className={cn(
-                    "shrink-0 border px-2.5 py-1 font-mono text-[11px] font-medium uppercase tracking-wide transition-colors",
-                    projectScopeKey === null
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-black/15 text-muted-foreground hover:border-black/40 hover:text-foreground dark:border-white/15 dark:hover:border-white/40",
-                  )}
+        <SidebarGroup className="px-2 pb-1 pt-1.5">
+          <div className="flex h-7 min-w-0 items-center justify-between gap-2 px-1">
+            <span className="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+              Threads
+            </span>
+            {projects.length > 1 ? (
+              <Menu>
+                <MenuTrigger
+                  aria-label="Filter threads by project"
+                  className="flex h-7 min-w-0 max-w-[70%] items-center gap-1.5 border border-black/15 px-2 text-[11px] text-muted-foreground transition-colors hover:border-black/35 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/15 dark:hover:border-white/35"
                 >
-                  All
-                </button>
-              ) : null}
-              {projects.map((project) => {
-                const scopeKey = `${project.environmentId}:${project.id}`;
-                const isScoped = projectScopeKey === scopeKey;
-                return (
-                  <button
-                    key={scopeKey}
-                    type="button"
-                    role="tab"
-                    aria-selected={isScoped}
-                    onClick={() => setProjectScopeKey(isScoped ? null : scopeKey)}
-                    className={cn(
-                      "flex shrink-0 items-center gap-1.5 border py-1 pl-1.5 pr-2.5 font-mono text-[11px] font-medium transition-colors",
-                      isScoped
-                        ? "border-foreground bg-foreground/10 text-foreground dark:bg-white/[0.1]"
-                        : "border-black/15 text-muted-foreground hover:border-black/40 hover:text-foreground dark:border-white/15 dark:hover:border-white/40",
-                    )}
+                  <ListFilterIcon className="size-3 shrink-0" />
+                  <span className="min-w-0 truncate">{scopedProject?.title ?? "All projects"}</span>
+                  <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+                </MenuTrigger>
+                <MenuPopup align="end" className="w-64">
+                  <MenuRadioGroup
+                    value={projectScopeKey ?? ALL_PROJECTS_SCOPE}
+                    onValueChange={(value) =>
+                      setProjectScopeKey(value === ALL_PROJECTS_SCOPE ? null : value)
+                    }
                   >
-                    <ProjectFavicon
-                      environmentId={project.environmentId}
-                      cwd={project.workspaceRoot}
-                      className="size-3.5"
-                    />
-                    <span className="max-w-28 truncate">{project.title}</span>
-                  </button>
-                );
-              })}
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="Add project"
-                      onClick={openAddProjectCommandPalette}
-                      className="flex size-6 shrink-0 items-center justify-center border border-dashed border-black/20 text-muted-foreground/60 transition-colors hover:border-solid hover:border-black/40 hover:text-foreground dark:border-white/20 dark:hover:border-white/40"
-                    />
-                  }
-                >
-                  <PlusIcon className="size-3" />
-                </TooltipTrigger>
-                <TooltipPopup side="bottom">Add project</TooltipPopup>
-              </Tooltip>
-            </div>
-          </SidebarGroup>
-        ) : null}
+                    <MenuRadioItem value={ALL_PROJECTS_SCOPE}>All projects</MenuRadioItem>
+                    {projects.map((project) => {
+                      const scopeKey = `${project.environmentId}:${project.id}`;
+                      return (
+                        <MenuRadioItem key={scopeKey} value={scopeKey}>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <ProjectFavicon
+                              environmentId={project.environmentId}
+                              cwd={project.workspaceRoot}
+                              className="size-3.5"
+                            />
+                            <span className="min-w-0 truncate">{project.title}</span>
+                          </span>
+                        </MenuRadioItem>
+                      );
+                    })}
+                  </MenuRadioGroup>
+                </MenuPopup>
+              </Menu>
+            ) : null}
+          </div>
+        </SidebarGroup>
         <SidebarGroup className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
           <ul ref={attachListAutoAnimateRef} className="flex flex-col gap-px">
             {orderedThreads.map((thread, threadIndex) => {
@@ -1533,7 +1536,10 @@ export default function SidebarV2() {
                     projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
                   }
                   projectTitle={
-                    projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
+                    scopedProject
+                      ? null
+                      : (projectTitleByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
+                        null)
                   }
                   providerEntryByInstanceId={providerEntryByInstanceId}
                   onThreadClick={handleThreadClick}
@@ -1591,12 +1597,47 @@ export default function SidebarV2() {
       </SidebarContent>
       <SidebarSeparator />
       <SidebarChromeFooter />
-      <Dialog open={newThreadPickerOpen} onOpenChange={setNewThreadPickerOpen}>
+      <Dialog open={newThreadPickerOpen} onOpenChange={handleNewThreadPickerOpenChange}>
         <DialogPopup className="max-w-sm p-0">
-          <DialogHeader className="px-4 pb-2 pt-4">
-            <DialogTitle className="text-sm">New thread in…</DialogTitle>
+          <DialogHeader className="gap-1 px-4 pb-2 pt-4">
+            <DialogTitle className="text-sm">New thread</DialogTitle>
+            <DialogDescription className="text-xs">
+              Choose the project where this thread should live.
+            </DialogDescription>
           </DialogHeader>
+          {showNewThreadProjectSearch ? (
+            <div className="px-2 pb-2">
+              <div className="relative">
+                <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                <Input
+                  autoFocus
+                  nativeInput
+                  type="search"
+                  value={newThreadProjectQuery}
+                  onChange={(event) => setNewThreadProjectQuery(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      newThreadProjectListRef.current
+                        ?.querySelector<HTMLButtonElement>("[data-new-thread-project-option]")
+                        ?.focus();
+                      return;
+                    }
+                    if (event.key !== "Enter") return;
+                    const firstProject = visibleNewThreadPickerProjects[0];
+                    if (!firstProject) return;
+                    event.preventDefault();
+                    createThreadInProject(firstProject.environmentId, firstProject.id);
+                  }}
+                  placeholder="Search projects"
+                  aria-label="Search projects"
+                  className="[&_[data-slot=input]]:pl-8"
+                />
+              </div>
+            </div>
+          ) : null}
           <div
+            ref={newThreadProjectListRef}
             className="flex flex-col gap-0.5 px-2 pb-3"
             role="listbox"
             aria-label="Choose a project for the new thread"
@@ -1610,7 +1651,11 @@ export default function SidebarV2() {
                 return;
               }
               const container = event.currentTarget;
-              const options = [...container.querySelectorAll<HTMLButtonElement>("button")];
+              const options = [
+                ...container.querySelectorAll<HTMLButtonElement>(
+                  "[data-new-thread-project-option]",
+                ),
+              ];
               if (options.length === 0) return;
               const currentIndex = options.findIndex((option) => option === document.activeElement);
               const nextIndex =
@@ -1618,20 +1663,29 @@ export default function SidebarV2() {
                   ? 0
                   : event.key === "End"
                     ? options.length - 1
-                    : event.key === "ArrowDown"
-                      ? (currentIndex + 1) % options.length
-                      : (currentIndex - 1 + options.length) % options.length;
+                    : currentIndex === -1
+                      ? event.key === "ArrowUp"
+                        ? options.length - 1
+                        : 0
+                      : event.key === "ArrowDown"
+                        ? (currentIndex + 1) % options.length
+                        : (currentIndex - 1 + options.length) % options.length;
               event.preventDefault();
               options[nextIndex]?.focus();
             }}
           >
-            {newThreadPickerProjects.map((project, index) => {
-              const isDefault = index === 0 && newThreadTargetProject !== null;
+            {visibleNewThreadPickerProjects.map((project, index) => {
+              const isDefault =
+                newThreadTargetProject?.environmentId === project.environmentId &&
+                newThreadTargetProject.id === project.id;
               return (
                 <button
                   key={`${project.environmentId}:${project.id}`}
                   type="button"
-                  autoFocus={isDefault}
+                  role="option"
+                  aria-selected={isDefault}
+                  data-new-thread-project-option=""
+                  autoFocus={!showNewThreadProjectSearch && index === 0}
                   onClick={() => createThreadInProject(project.environmentId, project.id)}
                   className={cn(
                     "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
@@ -1658,13 +1712,20 @@ export default function SidebarV2() {
                 </button>
               );
             })}
+            {visibleNewThreadPickerProjects.length === 0 ? (
+              <div className="px-2.5 py-5 text-center text-xs text-muted-foreground">
+                No matching projects
+              </div>
+            ) : null}
+          </div>
+          <div className="border-t border-border/70 px-2 py-2">
             <button
               type="button"
               onClick={() => {
-                setNewThreadPickerOpen(false);
+                handleNewThreadPickerOpenChange(false);
                 openAddProjectCommandPalette();
               }}
-              className="mt-1 flex items-center gap-2.5 rounded-lg border border-dashed border-border px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:bg-accent focus:text-foreground focus:outline-none"
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:bg-accent focus:text-foreground focus:outline-none"
             >
               <PlusIcon className="size-4" />
               Add project

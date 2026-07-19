@@ -316,6 +316,28 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         );
       }),
     );
+
+    it.effect("keeps working tree previews focused around changes", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const original = Array.from({ length: 60 }, (_, index) => `line-${index + 1}`).join("\n");
+        yield* writeTextFile(cwd, "context.txt", `${original}\n`);
+        yield* git(cwd, ["add", "context.txt"]);
+        yield* git(cwd, ["commit", "-m", "add context fixture"]);
+        const changed = original.replace("line-30", "line-30 changed");
+        yield* writeTextFile(cwd, "context.txt", `${changed}\n`);
+
+        const preview = yield* driver.getReviewDiffPreview({ cwd });
+        const workingTreeDiff = preview.sources.find(
+          (source) => source.kind === "working-tree",
+        )?.diff;
+
+        assert.include(workingTreeDiff, "line-24");
+        assert.notInclude(workingTreeDiff, "line-20");
+      }),
+    );
   });
 
   describe("repository status", () => {

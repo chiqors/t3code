@@ -8,7 +8,7 @@ import type {
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle, type CodeViewProps } from "@pierre/diffs/react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { fnv1a32 } from "~/lib/diffRendering";
@@ -117,6 +117,7 @@ export function AnnotatableCodeView({
     fileKey: string;
     annotation: DiffCommentLineAnnotation;
   } | null>(null);
+  const gutterSelectionRef = useRef(false);
 
   const filesByKey = useMemo(() => new Map(files.map((file) => [file.fileKey, file])), [files]);
   const items = useMemo<CodeViewDiffItem<DiffCommentAnnotationGroup>[]>(
@@ -229,6 +230,24 @@ export function AnnotatableCodeView({
     [filesByKey, sectionId, sectionTitle],
   );
 
+  const handleGutterComment = useCallback(
+    (range: SelectedLineRange, context: DiffSelectionContext) => {
+      gutterSelectionRef.current = true;
+      beginComment(range, context);
+    },
+    [beginComment],
+  );
+
+  const handleLineSelectionEnd = useCallback((range: SelectedLineRange | null) => {
+    if (gutterSelectionRef.current) {
+      gutterSelectionRef.current = false;
+      return;
+    }
+    if (range !== null) {
+      setSelectedLines(null);
+    }
+  }, []);
+
   const hasOpenComment = draft !== null;
   return (
     <CodeView<DiffCommentAnnotationGroup>
@@ -241,7 +260,8 @@ export function AnnotatableCodeView({
         ...options,
         enableGutterUtility: !hasOpenComment,
         enableLineSelection: !hasOpenComment,
-        onLineSelectionEnd: beginComment,
+        onGutterUtilityClick: handleGutterComment,
+        onLineSelectionEnd: handleLineSelectionEnd,
       }}
       renderHeaderPrefix={(item) =>
         item.type === "diff"

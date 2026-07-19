@@ -45,10 +45,12 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CircleAlertIcon,
+  GitBranchIcon,
   EyeIcon,
   GlobeIcon,
   HammerIcon,
   MessageCircleIcon,
+  MessageCirclePlusIcon,
   MousePointerClickIcon,
   PaintbrushIcon,
   MinusIcon,
@@ -82,6 +84,7 @@ import {
 } from "./MessagesTimeline.logic";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import {
   deriveDisplayedUserMessageState,
   type ParsedTerminalContextEntry,
@@ -129,9 +132,24 @@ interface TimelineRowSharedState {
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
+  latestUndoableTurnId: TurnId | null;
+  latestEditableUserMessageId: MessageId | null;
+  editingUserMessageId: MessageId | null;
+  editingUserMessageText: string;
   onRevertUserMessage: (messageId: MessageId) => void;
+  onStartEditUserMessage: (messageId: MessageId, text: string) => void;
+  onChangeEditUserMessage: (text: string) => void;
+  onCancelEditUserMessage: () => void;
+  onSubmitEditUserMessage: () => void;
+  onUndoTurnChanges: (turnSummary: TurnDiffSummary) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onContinueInNewChat: (input: {
+    messageId: MessageId;
+    text: string;
+    mode: "workspace" | "worktree";
+  }) => void;
+  canContinueInNewWorktree: boolean;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
 }
@@ -147,6 +165,7 @@ const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const EMPTY_CONTINUE_IN_NEW_CHAT = () => {};
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -163,8 +182,23 @@ interface MessagesTimelineProps {
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onContinueInNewChat?: (input: {
+    messageId: MessageId;
+    text: string;
+    mode: "workspace" | "worktree";
+  }) => void;
+  canContinueInNewWorktree?: boolean;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
+  latestUndoableTurnId: TurnId | null;
+  latestEditableUserMessageId: MessageId | null;
+  editingUserMessageId: MessageId | null;
+  editingUserMessageText: string;
+  onStartEditUserMessage: (messageId: MessageId, text: string) => void;
+  onChangeEditUserMessage: (text: string) => void;
+  onCancelEditUserMessage: () => void;
+  onSubmitEditUserMessage: () => void;
+  onUndoTurnChanges: (turnSummary: TurnDiffSummary) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
@@ -196,8 +230,19 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   turnDiffSummaryByAssistantMessageId,
   routeThreadKey,
   onOpenTurnDiff,
+  onContinueInNewChat = EMPTY_CONTINUE_IN_NEW_CHAT,
+  canContinueInNewWorktree = false,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
+  latestUndoableTurnId,
+  latestEditableUserMessageId,
+  editingUserMessageId,
+  editingUserMessageText,
+  onStartEditUserMessage,
+  onChangeEditUserMessage,
+  onCancelEditUserMessage,
+  onSubmitEditUserMessage,
+  onUndoTurnChanges,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
@@ -416,9 +461,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
+      latestUndoableTurnId,
+      latestEditableUserMessageId,
+      editingUserMessageId,
+      editingUserMessageText,
       onRevertUserMessage,
+      onStartEditUserMessage,
+      onChangeEditUserMessage,
+      onCancelEditUserMessage,
+      onSubmitEditUserMessage,
+      onUndoTurnChanges,
       onImageExpand,
       onOpenTurnDiff,
+      onContinueInNewChat,
+      canContinueInNewWorktree,
       onToggleTurnFold,
       onToggleWorkGroup,
     }),
@@ -430,9 +486,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
+      latestUndoableTurnId,
+      latestEditableUserMessageId,
+      editingUserMessageId,
+      editingUserMessageText,
       onRevertUserMessage,
+      onStartEditUserMessage,
+      onChangeEditUserMessage,
+      onCancelEditUserMessage,
+      onSubmitEditUserMessage,
+      onUndoTurnChanges,
       onImageExpand,
       onOpenTurnDiff,
+      onContinueInNewChat,
+      canContinueInNewWorktree,
       onToggleTurnFold,
       onToggleWorkGroup,
     ],
@@ -827,6 +894,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const activity = use(TimelineRowActivityCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
   const terminalContexts = displayedUserMessage.contexts;
@@ -846,6 +914,24 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
+  const canEdit =
+    ctx.latestEditableUserMessageId === row.message.id &&
+    !activity.activeTurnInProgress &&
+    !activity.isWorking &&
+    !activity.isRevertingCheckpoint;
+  const isEditing = ctx.editingUserMessageId === row.message.id;
+
+  if (isEditing) {
+    return (
+      <UserMessageEditor
+        value={ctx.editingUserMessageText}
+        onChange={ctx.onChangeEditUserMessage}
+        onCancel={ctx.onCancelEditUserMessage}
+        onSubmit={ctx.onSubmitEditUserMessage}
+        disabled={activity.isRevertingCheckpoint || activity.isWorking}
+      />
+    );
+  }
 
   return (
     <div className="group flex flex-col items-end gap-1">
@@ -918,12 +1004,106 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             </TooltipPopup>
           </Tooltip>
           <div className="flex items-center gap-0.5">
+            {canEdit && (
+              <EditUserMessageButton
+                onClick={() => {
+                  let editableText = visibleText;
+                  while (true) {
+                    const extracted = extractTrailingPreviewAnnotation(editableText);
+                    if (!extracted.annotation) break;
+                    editableText = extracted.promptText;
+                  }
+                  editableText = extractTrailingElementContexts(editableText).promptText;
+                  ctx.onStartEditUserMessage(row.message.id, editableText);
+                }}
+              />
+            )}
             {canRevertAgentWork && <RevertUserMessageButton messageId={row.message.id} />}
             {displayedUserMessage.copyText && (
               <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EditUserMessageButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            onClick={onClick}
+            aria-label="Edit message"
+          />
+        }
+      >
+        <SquarePenIcon className="size-3" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">Edit message</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function UserMessageEditor({
+  value,
+  onChange,
+  onCancel,
+  onSubmit,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  disabled: boolean;
+}) {
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    editorRef.current?.focus();
+    editorRef.current?.setSelectionRange(value.length, value.length);
+  }, [value.length]);
+
+  return (
+    <div className="w-full max-w-[80%] rounded-2xl border border-primary/50 bg-secondary p-3 shadow-sm">
+      <textarea
+        ref={editorRef}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            onSubmit();
+          }
+        }}
+        rows={Math.min(8, Math.max(3, value.split("\n").length))}
+        className="max-h-64 min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Edit message"
+      />
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button type="button" size="xs" variant="ghost" onClick={onCancel} disabled={disabled}>
+          <XIcon />
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          onClick={onSubmit}
+          disabled={disabled || value.trim().length === 0}
+        >
+          <CheckIcon />
+          Send
+        </Button>
       </div>
     </div>
   );
@@ -992,11 +1172,21 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
           resolvedTheme={ctx.resolvedTheme}
+          undoAvailable={ctx.latestUndoableTurnId === row.assistantTurnDiffSummary?.turnId}
+          onUndoTurnChanges={ctx.onUndoTurnChanges}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
         {row.showAssistantMeta ? (
           <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
             <AssistantCopyButton row={row} />
+            {!row.message.streaming && row.message.text.trim() ? (
+              <ContinueInNewChatButton
+                messageId={row.message.id}
+                text={row.message.text}
+                canContinueInNewWorktree={ctx.canContinueInNewWorktree}
+                onContinueInNewChat={ctx.onContinueInNewChat}
+              />
+            ) : null}
             {!row.message.streaming && (
               <Tooltip>
                 <TooltipTrigger
@@ -1013,6 +1203,79 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         ) : null}
       </div>
     </>
+  );
+}
+
+function ContinueInNewChatButton({
+  messageId,
+  text,
+  canContinueInNewWorktree,
+  onContinueInNewChat,
+}: {
+  messageId: MessageId;
+  text: string;
+  canContinueInNewWorktree: boolean;
+  onContinueInNewChat: (input: {
+    messageId: MessageId;
+    text: string;
+    mode: "workspace" | "worktree";
+  }) => void;
+}) {
+  const continueWith = (mode: "workspace" | "worktree") => {
+    onContinueInNewChat({ messageId, text, mode });
+  };
+
+  return (
+    <Menu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <MenuTrigger
+              render={
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  aria-label="Continue in a new chat"
+                />
+              }
+            />
+          }
+        >
+          <MessageCirclePlusIcon className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">Continue in a new chat</TooltipPopup>
+      </Tooltip>
+      <MenuPopup align="start" side="top" className="min-w-72">
+        <MenuItem
+          onClick={() => continueWith("workspace")}
+          className="items-start gap-3 px-2.5 py-2"
+        >
+          <MessageCircleIcon className="mt-0.5 size-4" />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">Use this workspace</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Continue from this message in a new local chat
+            </span>
+          </span>
+        </MenuItem>
+        <MenuItem
+          disabled={!canContinueInNewWorktree}
+          onClick={() => continueWith("worktree")}
+          className="items-start gap-3 px-2.5 py-2"
+        >
+          <GitBranchIcon className="mt-0.5 size-4" />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">Use a new worktree</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {canContinueInNewWorktree
+                ? "Continue from this message in a new worktree"
+                : "Only available for Git repositories"}
+            </span>
+          </span>
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 }
 
@@ -1193,11 +1456,15 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
   turnSummary,
   routeThreadKey,
   resolvedTheme,
+  undoAvailable,
+  onUndoTurnChanges,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary | undefined;
   routeThreadKey: string;
   resolvedTheme: "light" | "dark";
+  undoAvailable: boolean;
+  onUndoTurnChanges: (turnSummary: TurnDiffSummary) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
   if (!turnSummary) return null;
@@ -1210,6 +1477,8 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
       checkpointFiles={checkpointFiles}
       routeThreadKey={routeThreadKey}
       resolvedTheme={resolvedTheme}
+      undoAvailable={undoAvailable}
+      onUndoTurnChanges={onUndoTurnChanges}
       onOpenTurnDiff={onOpenTurnDiff}
     />
   );
@@ -1222,61 +1491,72 @@ function AssistantChangedFilesSectionInner({
   checkpointFiles,
   routeThreadKey,
   resolvedTheme,
+  undoAvailable,
+  onUndoTurnChanges,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary;
   checkpointFiles: TurnDiffSummary["files"];
   routeThreadKey: string;
   resolvedTheme: "light" | "dark";
+  undoAvailable: boolean;
+  onUndoTurnChanges: (turnSummary: TurnDiffSummary) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
+  const activity = use(TimelineRowActivityCtx);
   const allDirectoriesExpanded = useUiStateStore(
     (store) => store.threadChangedFilesExpandedById[routeThreadKey]?.[turnSummary.turnId] ?? true,
   );
-  const setExpanded = useUiStateStore((store) => store.setThreadChangedFilesExpanded);
   const summaryStat = summarizeTurnDiffStats(checkpointFiles);
-  const changedFileCountLabel = String(checkpointFiles.length);
+  const changedFileLabel = `${checkpointFiles.length} ${checkpointFiles.length === 1 ? "file" : "files"}`;
 
   return (
-    <div className="mt-2 rounded-lg border border-border/80 bg-card/45 p-2.5">
-      <div className="sticky top-2 z-10 mb-1.5 flex items-center justify-between gap-2 bg-[color-mix(in_srgb,var(--card)_45%,var(--background))] before:absolute before:inset-x-0 before:-top-2 before:h-2 before:bg-[color-mix(in_srgb,var(--card)_45%,var(--background))] before:content-['']">
-        <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
-          <span>Changed files ({changedFileCountLabel})</span>
-          {hasNonZeroStat(summaryStat) && (
-            <>
-              <span className="mx-1">•</span>
+    <div className="mt-2 overflow-hidden rounded-lg border border-border/80 bg-card/45">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 px-2.5 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background/80 text-muted-foreground">
+            <SquarePenIcon className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">Edited {changedFileLabel}</p>
+            {hasNonZeroStat(summaryStat) ? (
               <DiffStatLabel additions={summaryStat.additions} deletions={summaryStat.deletions} />
-            </>
-          )}
-        </p>
-        <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            size="xs"
-            variant="outline"
-            data-scroll-anchor-ignore
-            onClick={() => setExpanded(routeThreadKey, turnSummary.turnId, !allDirectoriesExpanded)}
-          >
-            {allDirectoriesExpanded ? "Collapse all" : "Expand all"}
-          </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {undoAvailable ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={activity.isRevertingCheckpoint || activity.isWorking}
+              onClick={() => onUndoTurnChanges(turnSummary)}
+            >
+              <Undo2Icon />
+              Undo
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="xs"
             variant="outline"
             onClick={() => onOpenTurnDiff(turnSummary.turnId, checkpointFiles[0]?.path)}
           >
-            View diff
+            Review
           </Button>
         </div>
       </div>
-      <ChangedFilesTree
-        key={`changed-files-tree:${turnSummary.turnId}`}
-        turnId={turnSummary.turnId}
-        files={checkpointFiles}
-        allDirectoriesExpanded={allDirectoriesExpanded}
-        resolvedTheme={resolvedTheme}
-        onOpenTurnDiff={onOpenTurnDiff}
-      />
+      <div className="border-t border-border/70 px-2 py-1.5">
+        <ChangedFilesTree
+          key={`changed-files-tree:${turnSummary.turnId}`}
+          turnId={turnSummary.turnId}
+          files={checkpointFiles}
+          allDirectoriesExpanded={allDirectoriesExpanded}
+          resolvedTheme={resolvedTheme}
+          onOpenTurnDiff={onOpenTurnDiff}
+        />
+      </div>
     </div>
   );
 }

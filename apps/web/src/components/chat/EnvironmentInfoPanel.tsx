@@ -1,0 +1,450 @@
+import type { EnvironmentId, ScopedThreadRef, VcsStatusResult } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+import {
+  ArrowUpRightIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  Globe2Icon,
+  GitBranchIcon,
+  ImageIcon,
+  ListFilterIcon,
+  MoreHorizontalIcon,
+  PanelRightOpenIcon,
+  SlidersHorizontalIcon,
+  TerminalSquareIcon,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+
+import { useKnownTerminalSessions } from "../../state/terminalSessions";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { type DraftId } from "../../composerDraftStore";
+import { cn } from "~/lib/utils";
+import { faviconUrlForOrigin } from "~/lib/favicon";
+import type { ConversationSource } from "./conversationSources";
+import { Button } from "../ui/button";
+import { Separator } from "../ui/separator";
+import { Toggle } from "../ui/toggle";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import GitActionsControl from "../GitActionsControl";
+import { BranchToolbarBranchSelector } from "../BranchToolbarBranchSelector";
+
+// Reset the pre-cleanup preference once so existing sessions start with the panel visible.
+const ENVIRONMENT_INFO_PANEL_OPEN_KEY = "chat_environment_info_open_v2";
+const ENVIRONMENT_INFO_PANEL_COLLAPSED_KEY = "chat_environment_info_collapsed";
+const MAX_ENVIRONMENT_INFO_ROWS = 10;
+
+interface EnvironmentInfoPanelProps {
+  environmentId: EnvironmentId;
+  gitStatus: VcsStatusResult | null;
+  sources: ReadonlyArray<ConversationSource>;
+  gitCwd: string | null;
+  activeThreadRef: ScopedThreadRef | null;
+  draftId?: DraftId;
+  onOpenChanges: () => void;
+  onOpenSources: () => void;
+  onOpenProcesses: () => void;
+  rightPanelOpen: boolean;
+}
+
+function OpenDetailsButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="size-6 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+            onClick={onClick}
+            aria-label={label}
+          >
+            <PanelRightOpenIcon className="size-3.5" />
+          </Button>
+        }
+      />
+      <TooltipPopup side="top">{label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+export function SourceVisual({ source }: { source: ConversationSource }) {
+  const [failed, setFailed] = useState(false);
+  const imageUrl =
+    source.kind === "attachment" ? source.previewUrl : faviconUrlForOrigin(source.url, 32);
+
+  if (imageUrl && !failed) {
+    return (
+      <img
+        src={imageUrl}
+        alt=""
+        aria-hidden
+        className={cn(
+          "size-8 shrink-0 border border-border/70 bg-muted object-cover",
+          source.kind === "link" && "p-1.5",
+        )}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center border border-border/70 bg-muted/30 text-muted-foreground">
+      {source.kind === "link" ? (
+        <Globe2Icon className="size-3.5" />
+      ) : (
+        <ImageIcon className="size-3.5" />
+      )}
+    </span>
+  );
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  trailing,
+  onClick,
+}: {
+  icon: typeof GitBranchIcon;
+  label: string;
+  value?: string;
+  trailing?: ReactNode;
+  onClick?: () => void;
+}) {
+  const content = (
+    <div className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-foreground/90 transition-colors hover:bg-accent/70">
+      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {value ? <span className="max-w-44 truncate text-muted-foreground">{value}</span> : null}
+      {trailing ?? <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground/60" />}
+    </div>
+  );
+  return onClick ? (
+    <button type="button" className="w-full" onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    <div className="block w-full">{content}</div>
+  );
+}
+
+function useEnvironmentInfoPanelOpen() {
+  return useLocalStorage(ENVIRONMENT_INFO_PANEL_OPEN_KEY, true, Schema.Boolean);
+}
+
+function useEnvironmentInfoPanelCollapsed() {
+  return useLocalStorage(ENVIRONMENT_INFO_PANEL_COLLAPSED_KEY, false, Schema.Boolean);
+}
+
+export function shouldShowEnvironmentInfoPanel(
+  preferredOpen: boolean,
+  _rightPanelOpen: boolean,
+): boolean {
+  return preferredOpen;
+}
+
+export function EnvironmentInfoToggle({ rightPanelOpen }: { rightPanelOpen: boolean }) {
+  const [open, setOpen] = useEnvironmentInfoPanelOpen();
+  const compactWindow = useMediaQuery("max-lg");
+  const label = compactWindow
+    ? "Environment information will return when the window is wider"
+    : open
+      ? "Hide environment information"
+      : "Show environment information";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Toggle
+            variant="ghost"
+            size="sm"
+            pressed={!compactWindow && shouldShowEnvironmentInfoPanel(open, rightPanelOpen)}
+            onPressedChange={setOpen}
+            aria-label={label}
+            data-testid="environment-info-trigger"
+          >
+            <SlidersHorizontalIcon className="size-3.5" />
+          </Toggle>
+        }
+      />
+      <TooltipPopup side="bottom">{label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+export function EnvironmentInfoPanel({
+  environmentId,
+  gitStatus,
+  sources,
+  gitCwd,
+  activeThreadRef,
+  draftId,
+  onOpenChanges,
+  onOpenSources,
+  onOpenProcesses,
+  rightPanelOpen,
+}: EnvironmentInfoPanelProps) {
+  const [open] = useEnvironmentInfoPanelOpen();
+  const compactWindow = useMediaQuery("max-lg");
+  const [collapsed, setCollapsed] = useEnvironmentInfoPanelCollapsed();
+  const [backgroundProcessesExpanded, setBackgroundProcessesExpanded] = useState(true);
+  const [sourcesExpanded, setSourcesExpanded] = useState(true);
+  const [branchStartFromOrigin, setBranchStartFromOrigin] = useState(false);
+  const changes = gitStatus?.workingTree;
+  const visibleSources = sources.slice(0, MAX_ENVIRONMENT_INFO_ROWS);
+  const knownTerminalSessions = useKnownTerminalSessions({
+    environmentId,
+    threadId: null,
+  });
+  const backgroundProcesses = knownTerminalSessions
+    .filter((session) => session.state.summary?.hasRunningSubprocess === true)
+    .map((session) => ({
+      id: session.target.terminalId,
+      label: session.state.summary?.label || "Background process",
+    }));
+
+  if (compactWindow || !shouldShowEnvironmentInfoPanel(open, rightPanelOpen)) {
+    return null;
+  }
+
+  return (
+    <aside
+      aria-label="Environment information"
+      data-testid="environment-info-panel"
+      className="absolute top-[calc(var(--workspace-topbar-height)+0.5rem)] right-3 z-30 max-h-[calc(100%-var(--workspace-topbar-height)-1rem)] w-[min(19rem,calc(100%-1.5rem))] overflow-y-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg/5 sm:right-4"
+    >
+      <div>
+        <div className="flex min-h-7 items-center justify-between px-1">
+          <p className="text-xs font-medium text-muted-foreground">Environment</p>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-6 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setCollapsed((value) => !value)}
+                  aria-expanded={!collapsed}
+                  aria-label={
+                    collapsed
+                      ? "Expand environment information"
+                      : "Collapse environment information"
+                  }
+                  data-testid="environment-info-collapse-trigger"
+                >
+                  {collapsed ? (
+                    <ChevronRightIcon className="size-3.5" />
+                  ) : (
+                    <ChevronDownIcon className="size-3.5" />
+                  )}
+                </Button>
+              }
+            />
+            <TooltipPopup side="top">
+              {collapsed ? "Expand environment information" : "Collapse environment information"}
+            </TooltipPopup>
+          </Tooltip>
+        </div>
+
+        {!collapsed ? (
+          <div className="mt-1 space-y-2">
+            <div>
+              <InfoRow
+                icon={ListFilterIcon}
+                label="Changes"
+                onClick={onOpenChanges}
+                trailing={
+                  changes ? (
+                    <span className="text-xs font-medium">
+                      <span className="text-emerald-500">
+                        +{changes.insertions.toLocaleString()}
+                      </span>{" "}
+                      <span className="text-rose-500">-{changes.deletions.toLocaleString()}</span>
+                    </span>
+                  ) : undefined
+                }
+              />
+              {activeThreadRef ? (
+                <InfoRow
+                  icon={GitBranchIcon}
+                  label="Branch"
+                  trailing={
+                    <BranchToolbarBranchSelector
+                      className="max-w-40"
+                      environmentId={environmentId}
+                      threadId={activeThreadRef.threadId}
+                      {...(draftId ? { draftId } : {})}
+                      envLocked={false}
+                      startFromOrigin={branchStartFromOrigin}
+                      onStartFromOriginChange={setBranchStartFromOrigin}
+                      showTriggerIcon={false}
+                      popupSide="left"
+                      popupAlign="start"
+                    />
+                  }
+                />
+              ) : (
+                <InfoRow
+                  icon={GitBranchIcon}
+                  label="Branch"
+                  value={gitStatus?.refName ?? "Detached"}
+                />
+              )}
+              <GitActionsControl
+                gitCwd={gitCwd}
+                activeThreadRef={activeThreadRef}
+                {...(draftId ? { draftId } : {})}
+                variant="git"
+              />
+              <GitActionsControl
+                gitCwd={gitCwd}
+                activeThreadRef={activeThreadRef}
+                {...(draftId ? { draftId } : {})}
+                variant="provider"
+              />
+            </div>
+
+            {backgroundProcesses.length > 0 || sources.length > 0 ? <Separator /> : null}
+
+            {backgroundProcesses.length > 0 ? (
+              <div className="space-y-0.5">
+                <div className="flex min-h-7 items-center justify-between rounded-sm px-1 hover:bg-accent/60">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                    onClick={() => setBackgroundProcessesExpanded((value) => !value)}
+                    aria-expanded={backgroundProcessesExpanded}
+                  >
+                    <p className="truncate text-xs font-medium text-muted-foreground">
+                      Background processes
+                    </p>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {backgroundProcesses.length}
+                      {backgroundProcessesExpanded ? (
+                        <ChevronDownIcon className="size-3.5" />
+                      ) : (
+                        <ChevronRightIcon className="size-3.5" />
+                      )}
+                    </span>
+                  </button>
+                  {backgroundProcesses.length > 0 ? (
+                    <OpenDetailsButton
+                      label="Open background processes"
+                      onClick={onOpenProcesses}
+                    />
+                  ) : null}
+                </div>
+                {backgroundProcessesExpanded ? (
+                  <>
+                    {backgroundProcesses.slice(0, MAX_ENVIRONMENT_INFO_ROWS).map((process) => (
+                      <div
+                        key={process.id}
+                        className="flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-1 text-[13px] text-foreground/90"
+                      >
+                        <TerminalSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate" title={process.label}>
+                          {process.label}
+                        </span>
+                        <MoreHorizontalIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+                      </div>
+                    ))}
+                    {backgroundProcesses.length > MAX_ENVIRONMENT_INFO_ROWS ? (
+                      <p className="px-1 text-[11px] text-muted-foreground">
+                        +{backgroundProcesses.length - MAX_ENVIRONMENT_INFO_ROWS} more running
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            {backgroundProcesses.length > 0 && sources.length > 0 ? <Separator /> : null}
+
+            {sources.length > 0 ? (
+              <div className="space-y-2 px-1">
+                <div className="flex min-h-7 items-center justify-between rounded-sm hover:bg-accent/60">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                    onClick={() => setSourcesExpanded((value) => !value)}
+                    aria-expanded={sourcesExpanded}
+                  >
+                    <p className="text-xs font-medium text-muted-foreground">Sources</p>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {sources.length}
+                      {sourcesExpanded ? (
+                        <ChevronDownIcon className="size-3.5" />
+                      ) : (
+                        <ChevronRightIcon className="size-3.5" />
+                      )}
+                    </span>
+                  </button>
+                  {sources.length > 0 ? (
+                    <OpenDetailsButton label="Open conversation sources" onClick={onOpenSources} />
+                  ) : null}
+                </div>
+                {sourcesExpanded ? (
+                  <>
+                    <div className="divide-y divide-border/70 border-y border-border/70">
+                      {visibleSources.map((source) => {
+                        const content = (
+                          <>
+                            <SourceVisual source={source} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-medium text-foreground/90">
+                                {source.title}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                                {source.detail}
+                              </span>
+                            </span>
+                            {source.kind === "link" ? (
+                              <ArrowUpRightIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+                            ) : null}
+                          </>
+                        );
+                        return source.kind === "link" ? (
+                          <a
+                            key={source.id}
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={source.url}
+                            className="flex min-w-0 items-center gap-2.5 py-2.5 transition-colors hover:bg-accent/50"
+                          >
+                            {content}
+                          </a>
+                        ) : (
+                          <div
+                            key={source.id}
+                            title={source.title}
+                            className="flex min-w-0 items-center gap-2.5 py-2.5"
+                          >
+                            {content}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {sources.length > MAX_ENVIRONMENT_INFO_ROWS ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="w-full justify-start px-1.5 text-muted-foreground"
+                        onClick={onOpenSources}
+                      >
+                        View all
+                        <ArrowUpRightIcon className="size-3" />
+                      </Button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
